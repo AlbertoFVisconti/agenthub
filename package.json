@@ -1,0 +1,28 @@
+{
+  "name": "agenthub",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm run --parallel --filter web --filter api dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api dev",
+    "dev:desktop": "pnpm --filter @agenthub/desktop start",
+    "start": "node scripts/start.js",
+    "build": "pnpm run --filter web --filter api build",
+    "typecheck": "pnpm run --recursive typecheck",
+    "lint": "pnpm run --recursive lint",
+    "test": "pnpm run --recursive test",
+    "db:generate": "pnpm --filter api db:generate",
+    "db:migrate": "pnpm --filter api db:migrate",
+    "db:studio": "pnpm --filter api db:studio"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.4",
+    "tree-kill": "^1.2.2",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

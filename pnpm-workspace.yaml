@@ -1,0 +1,20 @@
+packages:
+  - 'api'
+  - 'web'
+  - 'electron'
+  - 'packages/*'
+
+approved-builds:
+  - '@agenthub/api'
+  - '@agenthub/web'
+  - 'electron'
+  - 'packages/*'
+
+# Allowlist for packages permitted to run build scripts (pnpm v11)
+allowBuilds:
+  esbuild: true
+  electron: true
+  sharp: true
+  pg: true
+  '@google/genai': set this to true or false
+  protobufjs: set this to true or false

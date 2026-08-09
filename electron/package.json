@@ -1,0 +1,37 @@
+{
+  "name": "@agenthub/desktop",
+  "version": "0.0.1",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder -w"
+  },
+  "dependencies": {
+    "cross-spawn": "^7.0.6",
+    "dotenv": "^16.6.1",
+    "tree-kill": "^1.2.2"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.agenthub.desktop",
+    "productName": "AgentHub",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "../api/dist/**/*",
+      "../api/package.json",
+      "../web/out/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
+  }
+}
