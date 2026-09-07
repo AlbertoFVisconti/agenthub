@@ -20,7 +20,7 @@ export async function* runAgentLoop(params: AgentRunParams): AsyncGenerator<Agen
   const {
     adapter, executor, model, apiKey,
     systemPrompt, maxTokens,
-    maxTurns = 10,
+    maxTurns = 3,
     onConfirm,
   } = params
 
@@ -31,9 +31,17 @@ export async function* runAgentLoop(params: AgentRunParams): AsyncGenerator<Agen
   let turnIndex = 0
 
   while (turnIndex < maxTurns) {
-    const tools = await executor.listTools()
+    const isFinalTurn = turnIndex === maxTurns - 1
+    const tools = isFinalTurn ? [] : await executor.listTools()
     const pendingCalls: ToolCall[] = []
     let turnText = ''
+
+    if (isFinalTurn) {
+      messages.push({
+        role: 'user',
+        content: 'System notice: You have reached the maximum number of tool call iterations allowed for this request. You can no longer call tools. Please provide a final text response to the user based on the information you have gathered so far.'
+      })
+    }
 
     // ── Model turn ──────────────────────────────────────────────
     for await (const chunk of adapter.chat({ apiKey, model, messages, tools, systemPrompt, maxTokens })) {

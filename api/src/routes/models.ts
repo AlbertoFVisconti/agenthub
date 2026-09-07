@@ -103,21 +103,35 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      req.log.info({
+        hasWorkspacePath: !!workspacePath,
+        userId: req.session?.userId,
+        deploymentMode: process.env.DEPLOYMENT_MODE,
+        willLoadTools: !!(req.session?.userId || process.env.DEPLOYMENT_MODE === 'desktop')
+      }, '[TRACE] Evaluating marketplace tools block')
+
       // Load user's installed marketplace tools
-      if (req.session?.userId) {
+      if (req.session?.userId || process.env.DEPLOYMENT_MODE === 'desktop') {
         try {
           let userInstalls: { toolId: string, packageUrl: string | null, manifestJson: unknown }[] = []
 
           if (process.env.DEPLOYMENT_MODE === 'desktop') {
-            const fs = await import('node:fs/promises')
-            const path = await import('node:path')
-            const os = await import('node:os')
-            const toolsPath = path.join(os.homedir(), '.agenthub', 'desktop-tools.json')
+            const CLOUD_API_URL = process.env.API_URL || 'http://127.0.0.1:8081'
             try {
-              const content = await fs.readFile(toolsPath, 'utf8')
-              userInstalls = JSON.parse(content)
-            } catch (e) {
-              userInstalls = []
+              const res = await fetch(`${CLOUD_API_URL}/marketplace/installs`, {
+                headers: {
+                  cookie: req.headers.cookie || ''
+                }
+              })
+              if (!res.ok) {
+                const text = await res.text().catch(() => '')
+                req.log.error({ status: res.status, text }, 'Failed to fetch installs from Cloud API')
+              } else {
+                const data = await res.json() as any
+                userInstalls = data.installs || []
+              }
+            } catch (err) {
+              req.log.error({ err }, 'Network error fetching installs from Cloud API')
             }
           } else {
             const db = getDb()
@@ -128,31 +142,80 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
             })
             .from(installs)
             .innerJoin(tools, eq(installs.toolId, tools.id))
-            .where(eq(installs.userId, req.session.userId))
+            .where(eq(installs.userId, req.session!.userId))
+          }
+
+          req.log.info({ userInstallsLength: userInstalls.length }, '[TRACE] Loaded user installs')
+
+          const fs = await import('node:fs/promises')
+          const fsSync = await import('node:fs')
+          const path = await import('node:path')
+          const os = await import('node:os')
+          const { default: AdmZip } = await import('adm-zip')
+
+          let dockerLimits: { memory?: string, cpu?: string } = {}
+          if (process.env.DEPLOYMENT_MODE === 'desktop') {
+            try {
+              const baseDir = path.join(os.homedir(), '.agenthub')
+              dockerLimits = JSON.parse(await fs.readFile(path.join(baseDir, 'docker-settings.json'), 'utf8'))
+            } catch {}
           }
 
           for (const inst of userInstalls) {
-            if (inst.manifestJson && (inst.manifestJson as any).entrypoint) {
-               const manifest = inst.manifestJson as any
-               executorsList.push(new StdioMcpExecutor({ 
-                 image: manifest.name,
-                 workspacePath: workspacePath,
-                 network: manifest.permissions?.network === true,
-                 onEvent: (type, call, err) => {
-                   if (process.env.DEPLOYMENT_MODE !== 'desktop') {
-                     getDb().insert(toolEvents).values({
-                       toolId: inst.toolId,
-                       userId: req.session?.userId,
-                       eventType: type,
-                       metadataJson: {
-                         callName: call.name,
-                         error: err?.message
-                       }
-                     }).catch(e => req.log.error(e, 'Failed to log tool event'))
-                   }
-                 }
-               }))
+            if (!inst.manifestJson || !(inst.manifestJson as any).entrypoint) continue
+
+            const manifest = inst.manifestJson as any
+            const toolVersion = manifest.version || '0.0.0'
+            const toolDir = path.join(os.homedir(), '.agenthub', 'tools', `${inst.toolId}-${toolVersion}`)
+            
+            if (process.env.DEPLOYMENT_MODE === 'desktop') {
+              try {
+                if (!fsSync.existsSync(toolDir)) {
+                  const CLOUD_API_URL = process.env.API_URL || 'http://127.0.0.1:8081'
+                  const dlRes = await fetch(`${CLOUD_API_URL}${inst.packageUrl}`)
+                  if (!dlRes.ok) {
+                    req.log.error({ status: dlRes.status, url: inst.packageUrl }, 'Failed to download tool zip')
+                    continue
+                  }
+                  
+                  const buffer = Buffer.from(await dlRes.arrayBuffer())
+                  const tmpZip = path.join(os.tmpdir(), `agenthub-tool-${inst.toolId}-${Date.now()}.zip`)
+                  await fs.writeFile(tmpZip, buffer)
+                  
+                  const zip = new AdmZip(tmpZip)
+                  zip.extractAllTo(toolDir, true)
+                  await fs.rm(tmpZip, { force: true })
+                  req.log.info({ toolId: inst.toolId, version: toolVersion, dir: toolDir }, 'Extracted tool to local cache')
+                }
+              } catch (err) {
+                req.log.error({ err, toolId: inst.toolId }, 'Failed to download or extract tool package')
+                continue
+              }
             }
+            
+            executorsList.push(new StdioMcpExecutor({ 
+              image: manifest.name,
+              toolDir: process.env.DEPLOYMENT_MODE === 'desktop' ? toolDir : undefined,
+              entrypoint: manifest.entrypoint,
+              workspacePath: workspacePath,
+              toolId: inst.toolId,
+              toolVersion: toolVersion,
+              memoryLimit: dockerLimits.memory,
+              cpuLimit: dockerLimits.cpu,
+              onEvent: (type, call, err) => {
+                if (process.env.DEPLOYMENT_MODE !== 'desktop') {
+                  getDb().insert(toolEvents).values({
+                    toolId: inst.toolId,
+                    userId: req.session?.userId,
+                    eventType: type,
+                    metadataJson: {
+                      callName: call.name,
+                      error: err?.message
+                    }
+                  }).catch(e => req.log.error(e, 'Failed to log tool event'))
+                }
+              }
+            }))
           }
         } catch (err) {
           req.log.error(err, 'Failed to load user installs')
@@ -161,6 +224,13 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (executorsList.length > 0) {
         executor = new CompositeExecutor(executorsList)
+      }
+
+      try {
+        const allToolsForLog = await executor.listTools()
+        req.log.info({ toolNames: allToolsForLog.map(t => t.name) }, 'tools sent to model')
+      } catch (err) {
+        req.log.error({ err }, 'Failed to list/merge tools before starting model')
       }
 
       let loopExhausted = false

@@ -25,6 +25,8 @@ import authRoutes from './routes/auth.js'
 import modelsRoutes from './routes/models.js'
 import agentRoutes from './routes/agent.js'
 import creatorRoutes from './routes/creator.js'
+import { historyRoutes } from './routes/history.js'
+import dockerRoutes from './routes/docker.js'
 import reaperPlugin from './plugins/reaper.js'
 import fastifyStatic from '@fastify/static'
 
@@ -98,6 +100,8 @@ async function buildServer() {
   if (process.env.DEPLOYMENT_MODE === 'desktop') {
     await fastify.register(modelsRoutes)
     await fastify.register(agentRoutes)
+    await fastify.register(dockerRoutes)
+    await fastify.register(historyRoutes, { prefix: '/history' })
   }
   
   const marketplaceRoutes = await import('./routes/marketplace.js')

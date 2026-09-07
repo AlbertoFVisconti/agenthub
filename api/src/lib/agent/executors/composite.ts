@@ -12,8 +12,12 @@ export class CompositeExecutor implements ToolExecutor {
   async listTools(): Promise<ToolDefinition[]> {
     const allTools: ToolDefinition[] = []
     for (const ex of this.executors) {
-      const tools = await ex.listTools()
-      allTools.push(...tools)
+      try {
+        const tools = await ex.listTools()
+        allTools.push(...tools)
+      } catch (err) {
+        console.error('[CompositeExecutor] Failed to list tools from an executor:', err)
+      }
     }
     return allTools
   }
@@ -32,7 +36,14 @@ export class CompositeExecutor implements ToolExecutor {
     // To route the call, we first need to know which executor owns the tool.
     // We could pre-compute a routing map, but since tools list is small, we can query it.
     for (const ex of this.executors) {
-      const tools = await ex.listTools()
+      let tools: ToolDefinition[] = []
+      try {
+        tools = await ex.listTools()
+      } catch (err) {
+        console.error(`[CompositeExecutor] Failed to list tools during routing for ${call.name}:`, err)
+        continue
+      }
+      
       if (tools.some(t => t.name === call.name)) {
         if (!this.activeExecutors.has(ex)) {
           if (this.activeExecutors.size >= this.maxActive) {

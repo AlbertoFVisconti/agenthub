@@ -37,6 +37,7 @@ export class OpenAIAdapter implements ModelAdapter {
         openaiMessages.push({
           role: 'tool',
           tool_call_id: m.toolCallId,
+          name: m.toolName,
           content: m.content,
         })
       } else {
@@ -74,6 +75,8 @@ export class OpenAIAdapter implements ModelAdapter {
     try {
       const baseUrl = process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1'
       const endpoint = `${baseUrl.replace(/\/$/, '')}/chat/completions`
+      
+      console.log(`[OpenAI Adapter] Sending request to ${endpoint}:`, JSON.stringify(body, null, 2))
       
       res = await fetch(endpoint, {
         method: 'POST',
@@ -158,6 +161,10 @@ export class OpenAIAdapter implements ModelAdapter {
               yield { type: 'tool_call', call }
             }
             pendingCalls.clear()
+          }
+
+          if (choice.finish_reason) {
+            console.log(`[OpenAI] chunk finish_reason=${choice.finish_reason}, raw chunk:`, JSON.stringify(chunk))
           }
 
           if (choice.finish_reason === 'stop' || choice.finish_reason === 'length') {

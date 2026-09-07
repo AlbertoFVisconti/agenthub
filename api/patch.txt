@@ -1,0 +1,58 @@
+﻿  // PATCH /history/conversations/:id
+  app.patch('/conversations/:id', async (req, reply) => {
+    const parsed = z.object({ title: z.string().min(1) }).safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'INVALID_BODY' })
+    }
+
+    const { id } = req.params as { id: string }
+    const index = readIndex()
+    let foundConv: ConversationMeta | undefined
+
+    for (const proj of index.projects) {
+      foundConv = proj.conversations.find(c => c.id === id)
+      if (foundConv) {
+        foundConv.title = parsed.data.title
+        proj.updatedAt = new Date().toISOString()
+        break
+      }
+    }
+
+    if (!foundConv) {
+      return reply.status(404).send({ error: 'NOT_FOUND' })
+    }
+
+    writeIndex(index)
+    return reply.send({ success: true, conversation: foundConv })
+  })
+
+  // DELETE /history/conversations/:id
+  app.delete('/conversations/:id', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const index = readIndex()
+    let found = false
+
+    for (const proj of index.projects) {
+      const idx = proj.conversations.findIndex(c => c.id === id)
+      if (idx !== -1) {
+        proj.conversations.splice(idx, 1)
+        proj.updatedAt = new Date().toISOString()
+        found = true
+        break
+      }
+    }
+
+    if (!found) {
+      return reply.status(404).send({ error: 'NOT_FOUND' })
+    }
+
+    writeIndex(index)
+    
+    // Clean up message file
+    const msgFile = path.join(MESSAGES_DIR, \\.json\)
+    if (fs.existsSync(msgFile)) {
+      fs.unlinkSync(msgFile)
+    }
+
+    return reply.send({ success: true })
+  })

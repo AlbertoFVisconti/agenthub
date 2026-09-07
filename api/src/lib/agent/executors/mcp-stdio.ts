@@ -1,11 +1,11 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+﻿import { spawn, type ChildProcess } from 'node:child_process'
 import { createInterface, type Interface } from 'node:readline'
+import * as path from 'node:path'
+import * as os from 'node:os'
+import * as fs from 'node:fs'
 import type { ToolExecutor, ToolResult } from '../types.js'
 import type { ToolDefinition, ToolCall } from '../../models/types.js'
 
-/**
- * MCP JSON-RPC request/response shapes (minimal subset we need)
- */
 interface JsonRpcRequest {
   jsonrpc: '2.0'
   id: number
@@ -31,14 +31,6 @@ interface JsonRpcResponse {
   error?: { code: number; message: string; data?: unknown }
 }
 
-/**
- * StdioMcpExecutor — spawns a MCP server inside a basic Docker container
- * and communicates via stdio using the MCP JSON-RPC protocol.
- *
- * (Phase 4): Basic Docker isolation so no untrusted marketplace tool
- * runs as a bare host subprocess.
- * (Phase 7): Hardening flags (timeout, memory, no-network, user) will be added here.
- */
 export class StdioMcpExecutor implements ToolExecutor {
   private image: string
   private callTimeoutMs: number
@@ -50,8 +42,13 @@ export class StdioMcpExecutor implements ToolExecutor {
 
   constructor(private opts: {
     image: string
+    toolDir?: string
+    entrypoint?: string[]
     callTimeoutMs?: number
-    network?: boolean
+    toolId?: string
+    toolVersion?: string
+    memoryLimit?: string
+    cpuLimit?: string
     workspacePath?: string
     onEvent?: (type: 'invoke' | 'error', call: ToolCall, err?: Error) => void
   }) {
@@ -61,7 +58,7 @@ export class StdioMcpExecutor implements ToolExecutor {
 
   async listTools(): Promise<ToolDefinition[]> {
     if (this._tools) return this._tools
-    const res = await this.rpc({ method: 'tools/list' })
+    const res = await this.rpc({ method: 'tools/list' }, 8000)
     if (res.error) throw new Error(`MCP tools/list error: ${res.error.message}`)
     this._tools = (res.result?.tools ?? []).map((t: any) => ({
       name: t.name,
@@ -93,136 +90,134 @@ export class StdioMcpExecutor implements ToolExecutor {
         .map((c: any) => c.text ?? JSON.stringify(c))
         .join('\n')
 
-      return { callId: call.id, content: content || '(empty result)', isError: false }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      this.opts.onEvent?.('error', call, err instanceof Error ? err : new Error(message))
-      return { callId: call.id, content: `Execution error: ${message}`, isError: true }
+      return { callId: call.id, content, isError: false }
+    } catch (err: any) {
+      this.opts.onEvent?.('error', call, err)
+      return { callId: call.id, content: `Exception: ${err.message}`, isError: true }
     }
   }
 
-  /**
-   * Send a JSON-RPC request to the MCP server.
-   * Lazily starts the container on the first call.
-   */
-  private async rpc(req: Omit<JsonRpcRequest, 'jsonrpc' | 'id'>): Promise<JsonRpcResponse> {
-    await this.ensureStarted()
+  private async _ensureStarted(): Promise<void> {
+    if (this._proc) return
 
     return new Promise((resolve, reject) => {
-      const id = this._nextId++
+      try {
+        const fallbackDir = path.join(os.tmpdir(), 'agenthub-workspace')
+        fs.mkdirSync(fallbackDir, { recursive: true })
+        const mountPath = this.opts.workspacePath || fallbackDir
+        console.log(`[StdioMcpExecutor] Mounting workspace path: ${mountPath} for image ${this.image}`)
+        
+        const mem = this.opts.memoryLimit || '256m'
+        const cpu = this.opts.cpuLimit || '0.5'
+
+        const dockerArgs = [
+          'run', '-i', '--rm',
+          '--label=agenthub-tool=true',
+          `--memory=${mem}`,
+          `--memory-swap=${mem}`,
+          `--cpus=${cpu}`,
+          '--pids-limit=64',
+          '--network=none',
+          '--cap-drop=ALL',
+          '--security-opt=no-new-privileges',
+          '--read-only',
+          '--tmpfs=/tmp:rw,noexec,nosuid,size=64m',
+          '--user=1000:1000'
+        ]
+        dockerArgs.push(`-v`, `${mountPath}:/workspace:ro`)
+
+        if (this.opts.toolDir && this.opts.entrypoint) {
+          dockerArgs.push(`-v`, `${this.opts.toolDir}:/app:ro`)
+          dockerArgs.push(`-w`, `/app`)
+          dockerArgs.push(`node:20-alpine`)
+          dockerArgs.push(...this.opts.entrypoint)
+        } else {
+          dockerArgs.push(this.image)
+        }
+
+        console.log('[StdioMcpExecutor] Running container with args:', dockerArgs.join(' '))
+
+        const proc = spawn('docker', dockerArgs, {
+          env: process.env,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+        this._proc = proc
+
+        const rl = createInterface({ input: proc.stdout! })
+        this._rl = rl
+
+        rl.on('line', (line) => {
+          if (!line.trim()) return
+          try {
+            const msg = JSON.parse(line) as JsonRpcResponse
+            const pending = this._pending.get(msg.id)
+            if (pending) {
+              pending.resolve(msg)
+              this._pending.delete(msg.id)
+            }
+          } catch (err) {
+            console.error('[StdioMcpExecutor] failed to parse MCP response:', line, err)
+          }
+        })
+
+        proc.stderr?.on('data', (d) => {
+          console.error(`[StdioMcpExecutor][${this.image}] STDERR:`, d.toString())
+        })
+
+        proc.on('error', (err) => {
+          console.error(`[StdioMcpExecutor] Failed to start container ${this.image}:`, err)
+          reject(err)
+        })
+
+        proc.on('spawn', () => resolve())
+        proc.on('exit', () => {
+          this._proc = null
+          this._rl?.close()
+          this._rl = null
+        })
+      } catch (err) {
+        reject(err)
+      }
+    })
+  }
+
+  private async rpc(req: Omit<JsonRpcRequest, 'jsonrpc' | 'id'>, timeoutMs = this.callTimeoutMs): Promise<JsonRpcResponse> {
+    await this._ensureStarted()
+    const id = this._nextId++
+    const fullReq: JsonRpcRequest = { jsonrpc: '2.0', id, ...req }
+
+    return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this._pending.delete(id)
-        reject(new Error(`MCP call timed out after ${this.callTimeoutMs}ms`))
-      }, this.callTimeoutMs)
+        reject(new Error(`MCP request ${req.method} timed out after ${timeoutMs}ms`))
+      }, timeoutMs)
 
       this._pending.set(id, {
         resolve: (val) => { clearTimeout(timer); resolve(val) },
         reject: (err) => { clearTimeout(timer); reject(err) }
       })
 
-      const fullReq: JsonRpcRequest = { jsonrpc: '2.0', id, method: req.method, params: req.params }
-      this._proc!.stdin!.write(JSON.stringify(fullReq) + '\n')
-    })
-  }
-
-  private async ensureStarted(): Promise<void> {
-    if (this._proc) return
-
-    return new Promise((resolve, reject) => {
-      // Allow tool manifest to dictate network access if configured
-      // We use a custom Docker network 'agenthub-egress' that drops RFC1918 and metadata IP (169.254.169.254)
-      const networkFlag = this.opts?.network ? '--network=agenthub-egress' : '--network=none'
-
-      const dockerArgs = [
-        'run', '-i', '--rm',
-        '--label=agenthub-tool=true',
-        '--memory=256m',
-        '--cpus=0.5',
-        '--pids-limit=64',
-        networkFlag,
-        '--cap-drop=ALL',
-        '--security-opt=no-new-privileges',
-        '--read-only',
-        '--tmpfs=/tmp:rw,noexec,nosuid,size=64m',
-        '--user=1000:1000'
-      ]
-
-      if (this.opts.workspacePath) {
-        dockerArgs.push(`-v`, `${this.opts.workspacePath}:/workspace:ro`)
+      if (!this._proc || !this._proc.stdin) {
+        return reject(new Error('Process not running'))
       }
 
-      dockerArgs.push(this.image)
-
-      // Hardened Docker wrapper for Phase 7
-      const proc = spawn('docker', dockerArgs, {
-        env: process.env,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      })
-      this._proc = proc
-
-      const rl = createInterface({ input: proc.stdout! })
-      this._rl = rl
-
-      rl.on('line', (line) => {
-        if (!line.trim()) return
-        try {
-          const msg = JSON.parse(line)
-          if (msg.id !== undefined && this._pending.has(msg.id)) {
-            const { resolve } = this._pending.get(msg.id)!
-            this._pending.delete(msg.id)
-            resolve(msg)
-          }
-        } catch { /* ignore parsing errs */ }
-      })
-
-      proc.on('error', (err) => {
-        this.killAllPending(err)
-      })
-
-      proc.on('close', () => {
-        this.killAllPending(new Error('Container closed'))
-        this._proc = null
-      })
-
-      // Send initialize
-      const initId = this._nextId++
-      const initReq: JsonRpcRequest = {
-        jsonrpc: '2.0', id: initId,
-        method: 'initialize',
-        params: {
-          protocolVersion: '2024-11-05',
-          clientInfo: { name: 'agenthub', version: '0.0.1' },
-          capabilities: {},
-        },
-      }
-
-      const timer = setTimeout(() => {
-        this._pending.delete(initId)
-        proc.kill()
-        reject(new Error('MCP initialize timed out'))
-      }, 10000)
-
-      this._pending.set(initId, {
-        resolve: () => { clearTimeout(timer); resolve() },
-        reject: (err) => { clearTimeout(timer); reject(err) }
-      })
-
-      proc.stdin!.write(JSON.stringify(initReq) + '\n')
+      this._proc.stdin.write(JSON.stringify(fullReq) + '\n')
     })
-  }
-
-  private killAllPending(err: Error) {
-    for (const [id, { reject }] of this._pending.entries()) {
-      reject(err)
-      this._pending.delete(id)
-    }
   }
 
   async cleanup(): Promise<void> {
+    for (const { reject } of this._pending.values()) {
+      reject(new Error('Executor cleanup'))
+    }
+    this._pending.clear()
+
     if (this._proc) {
-      this.killAllPending(new Error('Session closed'))
       this._proc.kill()
       this._proc = null
+    }
+    if (this._rl) {
+      this._rl.close()
+      this._rl = null
     }
   }
 }

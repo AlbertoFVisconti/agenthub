@@ -308,3 +308,5 @@ export const sessionToolsRelations = relations(sessionTools, ({ one }) => ({
     references: [tools.id],
   }),
 }))
+
+

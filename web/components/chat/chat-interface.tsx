@@ -8,10 +8,11 @@ import { getStoredKey } from '@/app/settings/key-settings'
 import { MessageList } from './message-list'
 import { ChatInput } from './chat-input'
 import { ModelSelector } from './model-selector'
-import { LOCAL_API_BASE } from '../../lib/config'
+import { LOCAL_API_BASE, REMOTE_API_BASE } from '../../lib/config'
 import { Bot, AlertTriangle, FolderOpen } from 'lucide-react'
 import Link from 'next/link'
 import type { ToolCallState } from './tool-call-card'
+import { Sidebar } from './sidebar'
 
 export interface UIMessage {
   id: string
@@ -28,17 +29,169 @@ const DEFAULT_MODEL    = MODEL_CATALOGUE[1].id
 export function ChatInterface() {
   const { user, loading: sessionLoading, error: sessionError } = useSession()
   const [messages, setMessages] = useState<UIMessage[]>([])
-  const [provider, setProvider] = useState<string>(DEFAULT_PROVIDER)
-  const [model, setModel]       = useState<string>(DEFAULT_MODEL)
-  const [workspacePath, setWorkspacePath] = useState<string>('')
+  const [provider, setProvider] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('lastProvider') || DEFAULT_PROVIDER
+    }
+    return DEFAULT_PROVIDER
+  })
+  const [model, setModel] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('lastModel') || DEFAULT_MODEL
+    }
+    return DEFAULT_MODEL
+  })
+  const [workspacePath, setWorkspacePath] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('lastWorkspacePath') || ''
+    }
+    return ''
+  })
+  
+  useEffect(() => {
+    localStorage.setItem('lastProvider', provider)
+  }, [provider])
+  
+  useEffect(() => {
+    localStorage.setItem('lastModel', model)
+  }, [model])
+  
+  useEffect(() => {
+    localStorage.setItem('lastWorkspacePath', workspacePath)
+  }, [workspacePath])
   const [streaming, setStreaming] = useState(false)
   const [noKeyWarning, setNoKeyWarning] = useState(false)
+  
+  // Initialize from localStorage if available
+  const [conversationId, setConversationId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('lastConversationId') || null
+    }
+    return null
+  })
+  
   const abortRef = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  
+  // Track previous messages length to avoid infinite saves
+  const prevMessagesLength = useRef(0)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Persistence Hook
+  useEffect(() => {
+    if (!streaming && messages.length > 0 && messages.length > prevMessagesLength.current) {
+      prevMessagesLength.current = messages.length
+      saveConversation(messages)
+    }
+  }, [streaming, messages])
+
+  // Load initial conversation on mount if we have an ID but no messages
+  useEffect(() => {
+    if (conversationId && messages.length === 0 && !streaming) {
+      // Just load it. We don't have the workspace path, but the backend doesn't need it to load.
+      loadConversation(conversationId as string, workspacePath || 'default')
+    }
+  }, [conversationId])
+
+  const saveConversation = async (currentMessages: UIMessage[]) => {
+    try {
+      console.log(`[FRONTEND] Saving conversation... messages length: ${currentMessages.length}, conversationId: ${conversationId}`)
+      let activeConvId = conversationId
+      if (!activeConvId) {
+        // Create new conversation
+        const res = await fetch(`${LOCAL_API_BASE}/history/conversations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspacePath: workspacePath.trim() || 'default' })
+        })
+        if (!res.ok) throw new Error('Failed to create conversation')
+        const data = await res.json()
+        activeConvId = data.conversation.id
+        setConversationId(activeConvId)
+        localStorage.setItem('lastConversationId', activeConvId as string)
+      }
+
+      // Upsert messages
+      await fetch(`${LOCAL_API_BASE}/history/conversations/${activeConvId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: currentMessages.map(m => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            toolCalls: m.toolCalls,
+            usage: m.usage
+          }))
+        })
+      })
+    } catch (err) {
+      console.error('Failed to save conversation:', err)
+    }
+  }
+
+  const loadConversation = async (id: string, path: string) => {
+    if (streaming) return
+    try {
+      const res = await fetch(`${LOCAL_API_BASE}/history/conversations/${id}`)
+      if (!res.ok) {
+        throw new Error(`Failed to load: ${res.status}`)
+      }
+      const data = await res.json()
+      
+      const loadedMessages: UIMessage[] = data.conversation.messages.map((m: any) => ({
+        id: m.id || crypto.randomUUID(),
+        role: m.role,
+        content: m.content,
+        toolCalls: m.toolCalls || [],
+        usage: m.usage,
+      }))
+      
+      setConversationId(id)
+      localStorage.setItem('lastConversationId', id)
+      setWorkspacePath(path === 'default' ? '' : path)
+      setMessages(loadedMessages)
+      prevMessagesLength.current = loadedMessages.length
+    } catch (err) {
+      console.warn('Failed to load conversation, falling back to new chat:', err)
+      setConversationId(null)
+      localStorage.removeItem('lastConversationId')
+      setMessages([])
+      prevMessagesLength.current = 0
+    }
+  }
+
+  const handleNewChat = async () => {
+    if (streaming) return
+    
+    // Create conversation on backend immediately
+    try {
+      console.log(`[FRONTEND] Creating new conversation manually...`)
+      const res = await fetch(`${LOCAL_API_BASE}/history/conversations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspacePath: workspacePath.trim() || 'default' })
+      })
+      if (!res.ok) throw new Error('Failed to create new conversation')
+      const data = await res.json()
+      const newId = data.conversation.id
+      
+      setConversationId(newId)
+      localStorage.setItem('lastConversationId', newId)
+      setMessages([])
+      prevMessagesLength.current = 0
+    } catch (err) {
+      console.error(err)
+      // Fallback
+      setConversationId(null)
+      localStorage.removeItem('lastConversationId')
+      setMessages([])
+      prevMessagesLength.current = 0
+    }
+  }
 
   const sendMessage = useCallback(async (content: string) => {
     if (streaming || !content.trim()) return
@@ -70,11 +223,6 @@ export function ChatInterface() {
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
-
-      console.log('[TRACE] chat-interface.tsx headers sent:', {
-        hasAuth: !!headers['Authorization'],
-        providerRequested: provider
-      })
 
       const res = await fetch(`${LOCAL_API_BASE}/models/chat`, {
         method: 'POST', headers, credentials: 'include',
@@ -122,6 +270,17 @@ export function ChatInterface() {
                 toolCalls: [...(m.toolCalls ?? []), { call: event.call, status: 'running' }],
               } : m,
             ))
+          } else if (event.type === 'confirmation_required') {
+            setMessages(prev => prev.map(m =>
+              m.id === assistantId ? {
+                ...m,
+                toolCalls: (m.toolCalls ?? []).map(tc =>
+                  tc.call.id === event.callId
+                    ? { ...tc, status: 'pending_confirmation', confirmCmd: event.command }
+                    : tc
+                ),
+              } : m,
+            ))
           } else if (event.type === 'tool_result') {
             setMessages(prev => prev.map(m =>
               m.id === assistantId ? {
@@ -142,7 +301,6 @@ export function ChatInterface() {
           } else if (event.type === 'error') {
             throw new Error(event.message)
           }
-          // turn_done: no UI update needed (purely informational for now)
         }
       }
     } catch (err) {
@@ -167,7 +325,6 @@ export function ChatInterface() {
   }, [streaming, messages, provider, model, user, workspacePath])
 
   const stopStreaming = useCallback(() => { abortRef.current?.abort() }, [])
-  const clearMessages = useCallback(() => { if (!streaming) setMessages([]) }, [streaming])
 
   if (sessionLoading) {
     return (
@@ -188,85 +345,89 @@ export function ChatInterface() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)' }}>
-      {/* Toolbar */}
-      <div style={{
-        borderBottom: '1px solid rgba(255,255,255,0.07)', padding: '0.75rem 1.5rem',
-        display: 'flex', alignItems: 'center', gap: '1rem',
-        backgroundColor: 'rgba(10,10,20,0.6)', backdropFilter: 'blur(12px)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Bot size={18} color="#818cf8" />
-          <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#fff' }}>Agent Chat</span>
-        </div>
-        <div style={{ flex: 1, display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <ModelSelector provider={provider} model={model}
-            onChange={(p, m) => { setProvider(p); setModel(m) }} disabled={streaming} />
-          
-          <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '0 0.5rem', flex: 1, maxWidth: '400px' }}>
-            <FolderOpen size={14} color="#818cf8" style={{ marginRight: '0.4rem' }} />
-            <input 
-              type="text" 
-              placeholder="Workspace Path (e.g. C:\Users\alber\project)"
-              value={workspacePath}
-              onChange={e => setWorkspacePath(e.target.value)}
-              disabled={streaming}
-              style={{
-                background: 'transparent', border: 'none', color: '#fff', fontSize: '0.82rem',
-                padding: '0.4rem 0', width: '100%', outline: 'none'
-              }}
-            />
-            {typeof window !== 'undefined' && (window as any).electronAPI && (
-              <button
-                onClick={async () => {
-                  const folder = await (window as any).electronAPI.pickProjectFolder()
-                  if (folder) setWorkspacePath(folder)
-                }}
+    <div style={{ display: 'flex', height: 'calc(100vh - 60px)', width: '100%' }}>
+      <Sidebar 
+        currentConversationId={conversationId}
+        onSelectConversation={loadConversation}
+        onNewChat={handleNewChat}
+      />
+      
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+        {/* Toolbar */}
+        <div style={{
+          borderBottom: '1px solid rgba(255,255,255,0.07)', padding: '0.75rem 1.5rem',
+          display: 'flex', alignItems: 'center', gap: '1rem',
+          backgroundColor: 'rgba(10,10,20,0.6)', backdropFilter: 'blur(12px)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Bot size={18} color="#818cf8" />
+            <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#fff' }}>Agent Chat</span>
+          </div>
+          <div style={{ flex: 1, display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <ModelSelector provider={provider} model={model}
+              onChange={(p, m) => { setProvider(p); setModel(m) }} disabled={streaming} />
+            
+            <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '0 0.5rem', flex: 1, maxWidth: '400px' }}>
+              <FolderOpen size={14} color="#818cf8" style={{ marginRight: '0.4rem' }} />
+              <input 
+                type="text" 
+                placeholder="Workspace Path (e.g. C:\Users\alber\project)"
+                value={workspacePath}
+                onChange={e => setWorkspacePath(e.target.value)}
                 disabled={streaming}
-                className="btn-ghost"
-                style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', borderRadius: '4px', marginLeft: '0.5rem' }}
-              >
-                Browse
-              </button>
-            )}
+                style={{
+                  background: 'transparent', border: 'none', color: '#fff', fontSize: '0.82rem',
+                  padding: '0.4rem 0', width: '100%', outline: 'none'
+                }}
+              />
+              {typeof window !== 'undefined' && (window as any).electronAPI && (
+                <button
+                  onClick={async () => {
+                    const folder = await (window as any).electronAPI.pickProjectFolder()
+                    if (folder) setWorkspacePath(folder)
+                  }}
+                  disabled={streaming}
+                  className="btn-ghost"
+                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', borderRadius: '4px', marginLeft: '0.5rem' }}
+                >
+                  Browse
+                </button>
+              )}
+            </div>
           </div>
         </div>
-        {messages.length > 0 && !streaming && (
-          <button onClick={clearMessages} className="btn-ghost"
-            style={{ padding: '0.3rem 0.75rem', fontSize: '0.78rem' }}>Clear</button>
+
+        {/* No-key warning */}
+        {noKeyWarning && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '0.75rem',
+            padding: '0.75rem 1.5rem', backgroundColor: 'rgba(245,158,11,0.08)',
+            borderBottom: '1px solid rgba(245,158,11,0.2)',
+            fontSize: '0.85rem', color: '#f59e0b',
+          }}>
+            <AlertTriangle size={15} />
+            No {provider} API key set.{' '}
+            <Link href="/settings" style={{ color: '#818cf8', textDecoration: 'none', fontWeight: 600 }}>
+              Add your key in Settings →
+            </Link>
+            <button onClick={() => setNoKeyWarning(false)}
+              style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(220 15% 50%)', fontSize: '1rem' }}>
+              ×
+            </button>
+          </div>
         )}
-      </div>
 
-      {/* No-key warning */}
-      {noKeyWarning && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '0.75rem',
-          padding: '0.75rem 1.5rem', backgroundColor: 'rgba(245,158,11,0.08)',
-          borderBottom: '1px solid rgba(245,158,11,0.2)',
-          fontSize: '0.85rem', color: '#f59e0b',
-        }}>
-          <AlertTriangle size={15} />
-          No {provider} API key set.{' '}
-          <Link href="/settings" style={{ color: '#818cf8', textDecoration: 'none', fontWeight: 600 }}>
-            Add your key in Settings →
-          </Link>
-          <button onClick={() => setNoKeyWarning(false)}
-            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(220 15% 50%)', fontSize: '1rem' }}>
-            ×
-          </button>
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
+          {messages.length === 0
+            ? <EmptyState provider={provider} model={model} />
+            : <MessageList messages={messages} />
+          }
+          <div ref={bottomRef} />
         </div>
-      )}
 
-      {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
-        {messages.length === 0
-          ? <EmptyState provider={provider} model={model} />
-          : <MessageList messages={messages} />
-        }
-        <div ref={bottomRef} />
+        <ChatInput onSend={sendMessage} onStop={stopStreaming} streaming={streaming} />
       </div>
-
-      <ChatInput onSend={sendMessage} onStop={stopStreaming} streaming={streaming} />
     </div>
   )
 }

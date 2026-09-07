@@ -58,6 +58,13 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const manifest = parsedManifest.data
 
+      if (manifest.permissions?.network) {
+        return reply.status(400).send({
+          error: 'NETWORK_NOT_SUPPORTED',
+          message: 'Network-enabled tools are not supported yet — this beta only supports fully sandboxed, network-isolated tools.'
+        })
+      }
+
       // 4. Docker Dry-Run
       const passed = await runMcpDryRun(extractDir, manifest.entrypoint)
       if (!passed) {
@@ -149,6 +156,34 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+   * GET /marketplace/installs
+   * Get tools installed by the current user.
+   */
+  fastify.get('/marketplace/installs', async (req, reply) => {
+    const userId = req.session?.userId
+    if (!userId) {
+      return reply.status(401).send({ error: 'UNAUTHORIZED', message: 'Must be logged in to view installs' })
+    }
+
+    try {
+      const db = getDb()
+      const userInstalls = await db.select({
+        toolId: installs.toolId,
+        packageUrl: tools.packageUrl,
+        manifestJson: tools.manifestJson
+      })
+      .from(installs)
+      .innerJoin(tools, eq(installs.toolId, tools.id))
+      .where(eq(installs.userId, userId))
+
+      return reply.send({ installs: userInstalls })
+    } catch (err) {
+      req.log.error(err)
+      return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Failed to fetch installs' })
+    }
+  })
+
+  /**
    * POST /marketplace/install
    * Record a tool install for the current user.
    */
@@ -171,31 +206,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const tool = existing[0]
 
-      if (process.env.DEPLOYMENT_MODE === 'desktop') {
-        const fs = await import('node:fs/promises')
-        const path = await import('node:path')
-        const os = await import('node:os')
-        const toolsPath = path.join(os.homedir(), '.agenthub', 'desktop-tools.json')
-        await fs.mkdir(path.dirname(toolsPath), { recursive: true })
-        
-        let userInstalls = []
-        try {
-          const content = await fs.readFile(toolsPath, 'utf8')
-          userInstalls = JSON.parse(content)
-        } catch (e) {
-          userInstalls = []
-        }
-        
-        if (!userInstalls.some((i: any) => i.toolId === toolId)) {
-          userInstalls.push({
-            toolId,
-            packageUrl: tool.packageUrl,
-            manifestJson: tool.manifestJson
-          })
-          await fs.writeFile(toolsPath, JSON.stringify(userInstalls, null, 2))
-        }
-        return reply.send({ success: true })
-      }
+
 
       // Record the install (ignoring conflict if already installed)
       await db.insert(installs).values({
@@ -213,6 +224,67 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       req.log.error(err)
       return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Failed to install tool' })
     }
+  })
+
+  /**
+   * DELETE /marketplace/install/:toolId
+   * Uninstall a tool for the current user.
+   */
+  fastify.delete('/marketplace/install/:toolId', async (req, reply) => {
+    const userId = req.session?.userId
+    if (!userId) {
+      return reply.status(401).send({ error: 'UNAUTHORIZED', message: 'Must be logged in to uninstall tools' })
+    }
+
+    const { toolId } = req.params as { toolId: string }
+    if (!toolId) {
+      return reply.status(400).send({ error: 'BAD_REQUEST', message: 'toolId is required' })
+    }
+
+    try {
+      const db = getDb()
+      const result = await db.delete(installs)
+        .where(and(eq(installs.toolId, toolId), eq(installs.userId, userId)))
+        .returning()
+
+      if (result.length === 0) {
+        return reply.status(404).send({ error: 'NOT_FOUND', message: 'Install not found' })
+      }
+
+      // Update install count denormalized field
+      await db.update(tools).set({
+        installCount: sql`${tools.installCount} - 1`
+      }).where(eq(tools.id, toolId))
+
+      return reply.send({ success: true })
+    } catch (err) {
+      req.log.error(err)
+      return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Failed to uninstall tool' })
+    }
+  })
+
+  /**
+   * GET /uploads/tools/:filename
+   * Serves published tool zips.
+   */
+  fastify.get('/uploads/tools/:filename', { config: { skipSession: true } }, async (req, reply) => {
+    const { filename } = req.params as { filename: string }
+
+    // Prevent directory traversal and only serve .zip files
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\') || !filename.endsWith('.zip')) {
+      return reply.status(403).send({ error: 'FORBIDDEN', message: 'Invalid file requested' })
+    }
+
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'tools')
+    const filePath = path.join(uploadsDir, filename)
+
+    if (!fs.existsSync(filePath)) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'File not found' })
+    }
+
+    const stream = fs.createReadStream(filePath)
+    reply.header('Content-Type', 'application/zip')
+    return reply.send(stream)
   })
 }
 

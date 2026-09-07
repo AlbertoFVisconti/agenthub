@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Store, Search, Download, CheckCircle2, ChevronRight, Package, ShieldCheck } from 'lucide-react'
+import { Store, Search, Download, CheckCircle2, ChevronRight, Package, ShieldCheck, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { REMOTE_API_BASE } from '../../lib/config'
 
@@ -20,19 +20,31 @@ export default function MarketplacePage() {
   const [tools, setTools] = useState<Tool[]>([])
   const [loading, setLoading] = useState(true)
   const [installing, setInstalling] = useState<Record<string, boolean>>({})
+  const [uninstalling, setUninstalling] = useState<Record<string, boolean>>({})
   const [installed, setInstalled] = useState<Record<string, boolean>>({})
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [hoveredInstallId, setHoveredInstallId] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`${REMOTE_API_BASE}/marketplace/tools`)
-      .then(async res => {
+    Promise.all([
+      fetch(`${REMOTE_API_BASE}/marketplace/tools`).then(async res => {
         if (!res.ok) throw new Error('Failed to load marketplace tools')
         return res.json()
-      })
-      .then(data => {
-        if (data.tools) {
-          setTools(data.tools)
+      }),
+      // We do not throw on installs failure since anonymous users won't have any
+      fetch(`${REMOTE_API_BASE}/marketplace/installs`).then(res => res.ok ? res.json() : { installs: [] })
+    ])
+      .then(([toolsData, installsData]) => {
+        if (toolsData.tools) {
+          setTools(toolsData.tools)
+        }
+        if (installsData.installs) {
+          const installedMap: Record<string, boolean> = {}
+          installsData.installs.forEach((i: any) => {
+            installedMap[i.toolId] = true
+          })
+          setInstalled(installedMap)
         }
         setLoading(false)
       })
@@ -60,6 +72,28 @@ export default function MarketplacePage() {
       console.error(err)
     } finally {
       setInstalling(prev => ({ ...prev, [toolId]: false }))
+    }
+  }
+
+  const handleUninstall = async (toolId: string) => {
+    setUninstalling(prev => ({ ...prev, [toolId]: true }))
+    try {
+      const res = await fetch(`${REMOTE_API_BASE}/marketplace/install/${toolId}`, {
+        method: 'DELETE'
+      })
+      if (res.ok) {
+        setInstalled(prev => {
+          const next = { ...prev }
+          delete next[toolId]
+          return next
+        })
+      } else {
+        alert('Failed to uninstall tool.')
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setUninstalling(prev => ({ ...prev, [toolId]: false }))
     }
   }
 
@@ -186,9 +220,39 @@ export default function MarketplacePage() {
                 </div>
                 
                 {installed[tool.id] ? (
-                  <button disabled style={{ background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '6px', padding: '0.4rem 0.8rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, cursor: 'default' }}>
-                    <CheckCircle2 size={14} />
-                    Installed
+                  <button 
+                    onClick={() => handleUninstall(tool.id)}
+                    disabled={uninstalling[tool.id]}
+                    onMouseEnter={() => setHoveredInstallId(tool.id)}
+                    onMouseLeave={() => setHoveredInstallId(null)}
+                    style={{ 
+                      background: hoveredInstallId === tool.id ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)', 
+                      color: hoveredInstallId === tool.id ? '#ef4444' : '#22c55e', 
+                      border: `1px solid ${hoveredInstallId === tool.id ? 'rgba(239, 68, 68, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`, 
+                      borderRadius: '6px', 
+                      padding: '0.4rem 0.8rem', 
+                      fontSize: '0.85rem', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.4rem', 
+                      fontWeight: 600, 
+                      cursor: uninstalling[tool.id] ? 'wait' : 'pointer',
+                      transition: 'all 0.2s ease',
+                      opacity: uninstalling[tool.id] ? 0.7 : 1
+                    }}>
+                    {uninstalling[tool.id] ? (
+                      'Uninstalling...'
+                    ) : hoveredInstallId === tool.id ? (
+                      <>
+                        <Trash2 size={14} />
+                        Uninstall
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={14} />
+                        Installed
+                      </>
+                    )}
                   </button>
                 ) : (
                   <button 
