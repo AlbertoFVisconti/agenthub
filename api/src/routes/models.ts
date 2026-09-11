@@ -136,6 +136,9 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
               req.log.error({ err }, 'Network error fetching installs from Cloud API')
             }
           } else {
+            if (!req.session) {
+              return reply.status(401).send({ error: 'UNAUTHORIZED', message: 'Session required in cloud mode' })
+            }
             const db = getDb()
             userInstalls = await db.select({
               toolId: installs.toolId,
@@ -144,7 +147,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
             })
             .from(installs)
             .innerJoin(tools, eq(installs.toolId, tools.id))
-            .where(eq(installs.userId, req.session!.userId))
+            .where(eq(installs.userId, req.session.userId))
           }
 
           req.log.debug({ userInstallsLength: userInstalls.length }, '[TRACE] Loaded user installs')
@@ -248,17 +251,20 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
         req.log.warn({ model }, 'Unknown model ID â€” passing through to provider')
       }
 
+      const activeUserId = session ? session.userId : 'desktop-user'
+      const activeIsAnonymous = session ? session.isAnonymous : true
+
       req.log.debug({
         deploymentMode: process.env.DEPLOYMENT_MODE,
         provider,
-        userId: session?.userId,
-        isAnonymous: session?.isAnonymous,
+        userId: activeUserId,
+        isAnonymous: activeIsAnonymous,
         authorizationHeaderPresent: !!req.anonymousApiKey
       }, '[TRACE] /models/chat resolving API key')
 
       const apiKey = await resolveApiKey({
-        isAnonymous: session?.isAnonymous ?? true,
-        userId:      session?.userId ?? '',
+        isAnonymous: activeIsAnonymous,
+        userId:      activeUserId,
         provider:    provider as ModelProvider,
         headerKey:   req.anonymousApiKey,
       })
