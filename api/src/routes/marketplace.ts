@@ -348,7 +348,8 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!tool.packageUrl) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Tool package not found' })
       const filename = tool.packageUrl.split('/').pop()
-      const zipPath = path.join(process.cwd(), 'uploads', 'tools', filename!)
+      if (!filename) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Invalid tool package URL' })
+      const zipPath = path.join(process.cwd(), 'uploads', 'tools', filename)
       
       if (!fs.existsSync(zipPath)) {
         return reply.status(404).send({ error: 'NOT_FOUND', message: 'Zip file not found on disk' })
@@ -382,7 +383,8 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!tool.packageUrl) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Tool package not found' })
       const filename = tool.packageUrl.split('/').pop()
-      const zipPath = path.join(process.cwd(), 'uploads', 'tools', filename!)
+      if (!filename) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Invalid tool package URL' })
+      const zipPath = path.join(process.cwd(), 'uploads', 'tools', filename)
       
       if (!fs.existsSync(zipPath)) {
         return reply.status(404).send({ error: 'NOT_FOUND', message: 'Zip file not found on disk' })
