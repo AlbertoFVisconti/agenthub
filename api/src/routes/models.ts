@@ -251,14 +251,14 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
       req.log.debug({
         deploymentMode: process.env.DEPLOYMENT_MODE,
         provider,
-        userId: session.userId,
-        isAnonymous: session.isAnonymous,
+        userId: session?.userId,
+        isAnonymous: session?.isAnonymous,
         authorizationHeaderPresent: !!req.anonymousApiKey
       }, '[TRACE] /models/chat resolving API key')
 
       const apiKey = await resolveApiKey({
-        isAnonymous: session.isAnonymous,
-        userId:      session.userId,
+        isAnonymous: session?.isAnonymous ?? true,
+        userId:      session?.userId ?? '',
         provider:    provider as ModelProvider,
         headerKey:   req.anonymousApiKey,
       })
