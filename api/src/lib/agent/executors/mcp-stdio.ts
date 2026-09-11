@@ -105,7 +105,7 @@ export class StdioMcpExecutor implements ToolExecutor {
         const fallbackDir = path.join(os.tmpdir(), 'agenthub-workspace')
         fs.mkdirSync(fallbackDir, { recursive: true })
         const mountPath = this.opts.workspacePath || fallbackDir
-        console.log(`[StdioMcpExecutor] Mounting workspace path: ${mountPath} for image ${this.image}`)
+        console.debug(`[StdioMcpExecutor] Mounting workspace path: ${mountPath} for image ${this.image}`)
         
         const mem = this.opts.memoryLimit || '256m'
         const cpu = this.opts.cpuLimit || '0.5'
@@ -135,7 +135,7 @@ export class StdioMcpExecutor implements ToolExecutor {
           dockerArgs.push(this.image)
         }
 
-        console.log('[StdioMcpExecutor] Running container with args:', dockerArgs.join(' '))
+        console.debug('[StdioMcpExecutor] Running container with args:', dockerArgs.join(' '))
 
         const proc = spawn('docker', dockerArgs, {
           env: process.env,

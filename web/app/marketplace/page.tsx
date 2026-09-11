@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { Store, Search, Download, CheckCircle2, ChevronRight, Package, ShieldCheck, Trash2 } from 'lucide-react'
@@ -17,16 +17,24 @@ interface Tool {
 }
 
 export default function MarketplacePage() {
+  const [isElectron, setIsElectron] = useState(true)
   const [tools, setTools] = useState<Tool[]>([])
   const [loading, setLoading] = useState(true)
   const [installing, setInstalling] = useState<Record<string, boolean>>({})
   const [uninstalling, setUninstalling] = useState<Record<string, boolean>>({})
   const [installed, setInstalled] = useState<Record<string, boolean>>({})
   const [search, setSearch] = useState('')
+  const [selectedTool, setSelectedTool] = useState<Tool | null>(null)
+  const [sourceFiles, setSourceFiles] = useState<{name: string, size: number}[]>([])
+  const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [fileContent, setFileContent] = useState<string>('')
+  const [loadingSource, setLoadingSource] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hoveredInstallId, setHoveredInstallId] = useState<string | null>(null)
 
   useEffect(() => {
+    setIsElectron(typeof window !== 'undefined' && !!(window as any).electron)
+
     Promise.all([
       fetch(`${REMOTE_API_BASE}/marketplace/tools`).then(async res => {
         if (!res.ok) throw new Error('Failed to load marketplace tools')
@@ -97,6 +105,43 @@ export default function MarketplacePage() {
     }
   }
 
+  const handleViewTool = async (tool: Tool) => {
+    setSelectedTool(tool)
+    setSourceFiles([])
+    setSelectedFile(null)
+    setFileContent('')
+    setLoadingSource(true)
+
+    try {
+      const res = await fetch(`${REMOTE_API_BASE}/marketplace/tools/${tool.id}/files`)
+      if (res.ok) {
+        const data = await res.json()
+        setSourceFiles(data.files || [])
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingSource(false)
+    }
+  }
+
+  const handleViewFile = async (toolId: string, filename: string) => {
+    setSelectedFile(filename)
+    setFileContent('Loading...')
+    try {
+      const res = await fetch(`${REMOTE_API_BASE}/marketplace/tools/${toolId}/files/${encodeURIComponent(filename)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setFileContent(data.content)
+      } else {
+        const data = await res.json()
+        setFileContent('Error loading file: ' + data.message)
+      }
+    } catch (err: any) {
+      setFileContent('Error loading file content: ' + err.message)
+    }
+  }
+
   const filteredTools = tools.filter(t => 
     t.name.toLowerCase().includes(search.toLowerCase()) || 
     t.description.toLowerCase().includes(search.toLowerCase())
@@ -117,9 +162,11 @@ export default function MarketplacePage() {
               Discover and install MCP tools to supercharge your AI agent. Tools execute locally in sandboxed Docker containers.
             </p>
           </div>
+          {isElectron && (
           <Link href="/chat" className="btn-primary" style={{ padding: '0.75rem 1.5rem', borderRadius: '8px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             Go to Chat <ChevronRight size={16} />
           </Link>
+          )}
         </div>
 
         {/* Search Bar */}
@@ -173,8 +220,78 @@ export default function MarketplacePage() {
           </div>
         )}
 
-        {/* Tools Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
+                {/* Detail View OR Tools Grid */}
+        {selectedTool ? (
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '16px', padding: '2rem' }}>
+            <button onClick={() => setSelectedTool(null)} style={{ background: 'transparent', border: 'none', color: '#818cf8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '2rem', padding: 0, fontWeight: 600 }}>
+               &larr; Back to Marketplace
+            </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div>
+                <h2 style={{ margin: 0, color: '#fff', fontSize: '2rem', fontWeight: 700, marginBottom: '0.5rem' }}>{selectedTool.name}</h2>
+                <p style={{ color: 'hsl(220 15% 65%)', fontSize: '1.1rem', marginBottom: '1.5rem', lineHeight: 1.6 }}>{selectedTool.description}</p>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '2rem' }}>
+              <h3 style={{ color: '#fff', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                View Source
+              </h3>
+              
+              <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                {/* File List */}
+                <div style={{ width: '280px', flexShrink: 0, background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '1rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <h4 style={{ color: 'hsl(220 15% 60%)', fontSize: '0.85rem', textTransform: 'uppercase', marginBottom: '1rem', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Files</h4>
+                  {loadingSource ? (
+                    <div style={{ color: 'hsl(220 15% 55%)', fontSize: '0.9rem' }}>Loading files...</div>
+                  ) : sourceFiles.length === 0 ? (
+                    <div style={{ color: 'hsl(220 15% 55%)', fontSize: '0.9rem' }}>No files found.</div>
+                  ) : (
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      {sourceFiles.map(f => (
+                        <li key={f.name}>
+                          <button
+                            onClick={() => handleViewFile(selectedTool.id, f.name)}
+                            style={{
+                              width: '100%',
+                              textAlign: 'left',
+                              background: selectedFile === f.name ? 'rgba(129, 140, 248, 0.15)' : 'transparent',
+                              border: 'none',
+                              color: selectedFile === f.name ? '#818cf8' : 'hsl(220 15% 75%)',
+                              padding: '0.5rem 0.75rem',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '0.9rem',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{f.name}</span>
+                            <span style={{ fontSize: '0.75rem', color: 'hsl(220 15% 45%)' }}>{(f.size / 1024).toFixed(1)}kb</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {/* File Content */}
+                <div style={{ flex: 1, minWidth: '300px', background: '#0f111a', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', minHeight: '400px', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ padding: '0.75rem 1.5rem', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'hsl(220 15% 65%)', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{selectedFile || 'Select a file to view'}</span>
+                  </div>
+                  <div style={{ padding: '1.5rem', overflow: 'auto', flex: 1, maxHeight: '600px' }}>
+                    <pre style={{ margin: 0, color: '#e2e8f0', fontFamily: 'monospace', fontSize: '0.9rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                      {fileContent}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
           {filteredTools.map(tool => (
             <div key={tool.id} style={{
               background: 'rgba(255, 255, 255, 0.03)',
@@ -184,8 +301,9 @@ export default function MarketplacePage() {
               display: 'flex',
               flexDirection: 'column',
               transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-              cursor: 'default',
+              cursor: 'pointer',
             }}
+            onClick={() => handleViewTool(tool)}
             onMouseEnter={e => {
               e.currentTarget.style.transform = 'translateY(-4px)'
               e.currentTarget.style.boxShadow = '0 12px 24px rgba(0,0,0,0.3)'
@@ -221,7 +339,7 @@ export default function MarketplacePage() {
                 
                 {installed[tool.id] ? (
                   <button 
-                    onClick={() => handleUninstall(tool.id)}
+                    onClick={(e) => { e.stopPropagation(); handleUninstall(tool.id); }}
                     disabled={uninstalling[tool.id]}
                     onMouseEnter={() => setHoveredInstallId(tool.id)}
                     onMouseLeave={() => setHoveredInstallId(null)}
@@ -256,7 +374,7 @@ export default function MarketplacePage() {
                   </button>
                 ) : (
                   <button 
-                    onClick={() => handleInstall(tool.id)}
+                    onClick={(e) => { e.stopPropagation(); handleInstall(tool.id); }}
                     disabled={installing[tool.id]}
                     style={{ background: '#c084fc', color: '#fff', border: 'none', borderRadius: '6px', padding: '0.4rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, cursor: installing[tool.id] ? 'wait' : 'pointer', transition: 'background 0.2s ease', opacity: installing[tool.id] ? 0.7 : 1 }}
                     onMouseEnter={e => !installing[tool.id] && (e.currentTarget.style.background = '#a855f7')}
@@ -269,7 +387,11 @@ export default function MarketplacePage() {
             </div>
           ))}
         </div>
+        )}
       </div>
     </div>
   )
 }
+
+
+

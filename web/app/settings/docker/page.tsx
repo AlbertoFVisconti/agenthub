@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { LOCAL_API_BASE } from '@/lib/config'
@@ -10,7 +10,7 @@ interface DockerSettings {
 
 interface ToolInstall {
   toolId: string
-  manifestJson: { version: string, permissions?: { network?: boolean } }
+  manifestJson: { name?: string, version: string, permissions?: { network?: boolean } }
 }
 
 export default function DockerSettingsPage() {
@@ -244,3 +244,4 @@ export default function DockerSettingsPage() {
     </div>
   )
 }
+

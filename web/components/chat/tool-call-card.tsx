@@ -41,13 +41,6 @@ export function ToolCallCard({ state, onConfirmed }: ToolCallCardProps) {
     status === 'done'    ? 'rgba(34,197,94,0.2)'   :
                            'rgba(239,68,68,0.2)'
 
-  let networkReq: { type: string, toolId?: string, version?: string } | null = null
-  if (confirmCmd) {
-    try {
-      const parsed = JSON.parse(confirmCmd)
-      if (parsed.type === 'network') networkReq = parsed
-    } catch {}
-  }
 
   const handleConfirm = async (approved: boolean | string) => {
     try {
@@ -57,8 +50,6 @@ export function ToolCallCard({ state, onConfirmed }: ToolCallCardProps) {
         body: JSON.stringify({ 
           callId: call.id, 
           approved,
-          toolId: networkReq?.toolId,
-          version: networkReq?.version
         })
       })
       onConfirmed?.()
@@ -98,29 +89,7 @@ export function ToolCallCard({ state, onConfirmed }: ToolCallCardProps) {
 
       {(expanded || isPending) && (
         <div style={{ padding: '0 0.875rem 0.875rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          {isPending && networkReq && (
-            <div style={{ marginTop: '0.6rem', padding: '0.75rem', background: 'rgba(245,158,11,0.1)', borderRadius: '6px', border: '1px solid rgba(245,158,11,0.2)' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fcd34d', marginBottom: '0.5rem' }}>
-                Tool Requires Network Access
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#e2e8f0', marginBottom: '0.75rem' }}>
-                The tool <strong>{networkReq.toolId}</strong> is requesting internet access.
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button onClick={() => handleConfirm('always')} style={{
-                  padding: '0.4rem 0.75rem', background: '#22c55e', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600
-                }}>Allow always</button>
-                <button onClick={() => handleConfirm('once')} style={{
-                  padding: '0.4rem 0.75rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600
-                }}>Allow once</button>
-                <button onClick={() => handleConfirm('deny')} style={{
-                  padding: '0.4rem 0.75rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600
-                }}>Deny</button>
-              </div>
-            </div>
-          )}
-
-          {isPending && !networkReq && confirmCmd && (
+          {isPending && confirmCmd && (
             <div style={{ marginTop: '0.6rem', padding: '0.75rem', background: 'rgba(245,158,11,0.1)', borderRadius: '6px', border: '1px solid rgba(245,158,11,0.2)' }}>
               <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fcd34d', marginBottom: '0.5rem' }}>
                 Confirmation Required
@@ -175,3 +144,5 @@ export function ToolCallCard({ state, onConfirmed }: ToolCallCardProps) {
     </div>
   )
 }
+
+

@@ -155,7 +155,6 @@ export class AnthropicAdapter implements ModelAdapter {
             }
           } else if (event.type === 'message_delta') {
             const e = event as AnthropicMessageDelta
-            console.log(`[Anthropic] message_delta stop_reason=${e.delta?.stop_reason}, raw event:`, JSON.stringify(e))
             yield { type: 'done', usage: { inputTokens, outputTokens: e.usage.output_tokens } }
           }
         }

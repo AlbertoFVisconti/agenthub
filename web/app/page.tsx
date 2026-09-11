@@ -1,9 +1,10 @@
-import Link from 'next/link'
+﻿import Link from 'next/link'
+import { HeroButtons } from '@/components/home/hero-buttons'
 import { Bot, Store, LayoutDashboard, ArrowRight, Zap, Shield, Puzzle } from 'lucide-react'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'AgentHub — BYOK AI Agent Platform',
+  title: 'AgentHub â€” BYOK AI Agent Platform',
   description:
     'Run powerful AI agents with your own API keys. Browse and install MCP tools from the marketplace in one click.',
 }
@@ -13,7 +14,7 @@ const features = [
     icon: Bot,
     title: 'BYOK Agent Runtime',
     description:
-      'Bring your own Anthropic, OpenAI, or Google API key. No subscriptions, no middleman — your key, your bill.',
+      'Bring your own Anthropic, OpenAI, or Google API key. No subscriptions, no middleman â€” your key, your bill.',
     color: '#818cf8',
   },
   {
@@ -34,7 +35,7 @@ const features = [
     icon: Puzzle,
     title: 'MCP Standard',
     description:
-      'Every tool is a real MCP server — compatible with Claude Desktop, Cursor, and any other MCP-aware client.',
+      'Every tool is a real MCP server â€” compatible with Claude Desktop, Cursor, and any other MCP-aware client.',
     color: '#34d399',
   },
   {
@@ -117,16 +118,7 @@ export default function HomePage() {
             Model Context Protocol. No subscriptions. No lock-in.
           </p>
 
-          <div
-            style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}
-          >
-            <Link href="/chat" className="btn-primary" style={{ fontSize: '1rem', padding: '0.75rem 1.75rem' }}>
-              Start chatting <ArrowRight size={16} />
-            </Link>
-            <Link href="/marketplace" className="btn-ghost" style={{ fontSize: '1rem', padding: '0.75rem 1.75rem' }}>
-              <Store size={16} /> Browse tools
-            </Link>
-          </div>
+          <HeroButtons />
         </div>
       </section>
 
@@ -194,3 +186,4 @@ export default function HomePage() {
     </div>
   )
 }
+

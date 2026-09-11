@@ -6,8 +6,7 @@ import AdmZip from 'adm-zip'
 import { eq, and, sql } from 'drizzle-orm'
 import { getDb } from '../db/index.js'
 import { tools, toolVersions, installs } from '../db/schema.js'
-import { McpManifestSchema } from '../lib/mcp/manifest.js'
-import { runMcpDryRun } from '../lib/mcp/dry-run.js'
+import { McpManifestSchema, runMcpDryRun, checkDockerAvailable } from '@agenthub/tool-utils'
 import '@fastify/multipart'
 
 const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
@@ -61,11 +60,19 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       if (manifest.permissions?.network) {
         return reply.status(400).send({
           error: 'NETWORK_NOT_SUPPORTED',
-          message: 'Network-enabled tools are not supported yet — this beta only supports fully sandboxed, network-isolated tools.'
+          message: 'Network-enabled tools are not supported yet â€” this beta only supports fully sandboxed, network-isolated tools.'
         })
       }
 
       // 4. Docker Dry-Run
+      const dockerStatus = await checkDockerAvailable()
+      if (!dockerStatus.available) {
+        return reply.status(500).send({ 
+          error: 'DOCKER_UNAVAILABLE', 
+          message: 'Docker Desktop doesn\'t appear to be running. Please start Docker Desktop and try again.' 
+        })
+      }
+
       const passed = await runMcpDryRun(extractDir, manifest.entrypoint)
       if (!passed) {
         return reply.status(400).send({ 
@@ -285,6 +292,118 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
     const stream = fs.createReadStream(filePath)
     reply.header('Content-Type', 'application/zip')
     return reply.send(stream)
+  })
+
+  /**
+   * DELETE /marketplace/tools/:id
+   * Soft-delete a tool if the user is the owner.
+   */
+  fastify.delete<{ Params: { id: string } }>('/marketplace/tools/:id', async (req, reply) => {
+    try {
+      const toolId = req.params.id
+      const userId = req.session?.userId
+
+      if (!userId || req.session?.isAnonymous) {
+        return reply.status(403).send({ error: 'FORBIDDEN', message: 'Must be logged in to delete tools' })
+      }
+
+      const db = getDb()
+      const existing = await db.select().from(tools).where(eq(tools.id, toolId)).limit(1)
+
+      if (existing.length === 0) {
+        return reply.status(404).send({ error: 'NOT_FOUND', message: 'Tool not found' })
+      }
+
+      if (existing[0].ownerId !== userId) {
+        return reply.status(403).send({ error: 'FORBIDDEN', message: 'You do not own this tool' })
+      }
+
+      await db.update(tools).set({
+        status: 'removed',
+        updatedAt: new Date()
+      }).where(eq(tools.id, toolId))
+
+      return reply.send({ success: true })
+    } catch (err) {
+      req.log.error(err)
+      return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Failed to delete tool' })
+    }
+  })
+
+  /**
+   * GET /marketplace/tools/:id/files
+   * List files in the tool's package.
+   */
+  fastify.get<{ Params: { id: string } }>('/marketplace/tools/:id/files', { config: { skipSession: true } }, async (req, reply) => {
+    try {
+      const db = getDb()
+      const existing = await db.select().from(tools).where(eq(tools.id, req.params.id)).limit(1)
+      if (existing.length === 0) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Tool not found' })
+      const tool = existing[0]
+
+      const { canViewSource } = await import('../lib/permissions.js')
+      if (!canViewSource(tool, req.session)) {
+        return reply.status(403).send({ error: 'FORBIDDEN', message: 'Not allowed to view source for this tool' })
+      }
+
+      if (!tool.packageUrl) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Tool package not found' })
+      const filename = tool.packageUrl.split('/').pop()
+      const zipPath = path.join(process.cwd(), 'uploads', 'tools', filename!)
+      
+      if (!fs.existsSync(zipPath)) {
+        return reply.status(404).send({ error: 'NOT_FOUND', message: 'Zip file not found on disk' })
+      }
+
+      const zip = new AdmZip(zipPath)
+      const entries = zip.getEntries()
+      const files = entries.filter(e => !e.isDirectory).map(e => ({ name: e.entryName, size: e.header.size }))
+      return reply.send({ files })
+    } catch (err) {
+      req.log.error(err)
+      return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Failed to read zip file' })
+    }
+  })
+
+  /**
+   * GET /marketplace/tools/:id/files/*
+   * Get raw content of a specific file in the tool's package.
+   */
+  fastify.get<{ Params: { id: string, '*': string } }>('/marketplace/tools/:id/files/*', { config: { skipSession: true } }, async (req, reply) => {
+    try {
+      const db = getDb()
+      const existing = await db.select().from(tools).where(eq(tools.id, req.params.id)).limit(1)
+      if (existing.length === 0) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Tool not found' })
+      const tool = existing[0]
+
+      const { canViewSource } = await import('../lib/permissions.js')
+      if (!canViewSource(tool, req.session)) {
+        return reply.status(403).send({ error: 'FORBIDDEN', message: 'Not allowed to view source for this tool' })
+      }
+
+      if (!tool.packageUrl) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Tool package not found' })
+      const filename = tool.packageUrl.split('/').pop()
+      const zipPath = path.join(process.cwd(), 'uploads', 'tools', filename!)
+      
+      if (!fs.existsSync(zipPath)) {
+        return reply.status(404).send({ error: 'NOT_FOUND', message: 'Zip file not found on disk' })
+      }
+
+      const filepath = (req.params as any)['*']
+      const zip = new AdmZip(zipPath)
+      const entries = zip.getEntries()
+      
+      // Exact string match against zip entries prevents traversal 
+      const entry = entries.find(e => !e.isDirectory && e.entryName === filepath)
+      if (!entry) {
+        return reply.status(404).send({ error: 'NOT_FOUND', message: 'File not found in package' })
+      }
+
+      const content = zip.readAsText(entry)
+      return reply.send({ content })
+    } catch (err) {
+      req.log.error(err)
+      return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Failed to read file from zip' })
+    }
   })
 }
 

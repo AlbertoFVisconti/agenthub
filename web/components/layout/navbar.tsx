@@ -1,13 +1,14 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { Bot, Store, LayoutDashboard, Settings, Zap, LogOut, User } from 'lucide-react'
+import { Bot, Store, LayoutDashboard, Settings, Zap, LogOut, User, Download } from 'lucide-react'
 import { useSession } from '@/lib/session-context'
 import { REMOTE_API_BASE, loginWithGithub } from '@/lib/config'
+import { useState, useEffect } from 'react'
 
-const navLinks = [
+const allNavLinks = [
   { href: '/chat',        label: 'Chat',        icon: Bot },
   { href: '/marketplace', label: 'Marketplace', icon: Store },
   { href: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard },
@@ -16,6 +17,16 @@ const navLinks = [
 export function Navbar() {
   const pathname = usePathname()
   const { user, loading, logout } = useSession()
+  const [isElectron, setIsElectron] = useState(true)
+
+  useEffect(() => {
+    setIsElectron(typeof window !== 'undefined' && !!(window as any).electron)
+  }, [])
+
+  const navLinks = allNavLinks.filter(link => {
+    if (link.href === '/chat' && !isElectron) return false
+    return true
+  })
 
   return (
     <header style={{
@@ -66,6 +77,18 @@ export function Navbar() {
 
         {/* Right: session state */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {!isElectron && (
+            <a href="https://example.com/download" style={{
+              display: 'flex', alignItems: 'center', gap: '0.4rem',
+              padding: '0.4rem 0.75rem', borderRadius: '8px',
+              fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none',
+              backgroundColor: '#6366f1', color: '#fff', border: 'none',
+              transition: 'all 0.15s',
+            }}>
+              <Download size={14} /> Download AgentHub
+            </a>
+          )}
+
           <Link href="/settings" style={{
             display: 'flex', alignItems: 'center', gap: '0.4rem',
             padding: '0.4rem 0.75rem', borderRadius: '8px',

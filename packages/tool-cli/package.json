@@ -1,0 +1,14 @@
+{
+  "name": "@agenthub/tool-cli",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "agenthub-tool": "./index.js"
+  },
+  "dependencies": {
+    "@agenthub/tool-utils": "workspace:*",
+    "adm-zip": "^0.6.0",
+    "esbuild": "^0.28.2",
+    "ignore": "^7.0.8"
+  }
+}

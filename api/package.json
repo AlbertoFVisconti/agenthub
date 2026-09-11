@@ -15,6 +15,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@agenthub/tool-utils": "workspace:*",
     "@agenthub/types": "workspace:*",
     "@fastify/cookie": "^9.4.0",
     "@fastify/cors": "^8.5.0",
@@ -42,6 +43,7 @@
     "@types/uuid": "^10.0.0",
     "cross-env": "^10.1.0",
     "drizzle-kit": "^0.22.0",
+    "esbuild": "^0.28.2",
     "tsx": "^4.11.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"

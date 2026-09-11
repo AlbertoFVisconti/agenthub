@@ -1,7 +1,7 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { BarChart3, Activity, AlertCircle, Download, Package, ChevronRight, LayoutDashboard, Loader2 } from 'lucide-react'
+import { BarChart3, Activity, AlertCircle, Download, Package, ChevronRight, LayoutDashboard, Loader2, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { REMOTE_API_BASE, loginWithGithub } from '../../lib/config'
 
@@ -49,7 +49,7 @@ export default function DashboardPage() {
         setTools(toolsWithMetrics)
       }
     } catch (err: any) {
-      console.error('Failed to fetch tools', err)
+      if (err.message !== 'Unauthorized') console.error('Failed to fetch tools', err)
       setError(err.message || 'Failed to fetch tools')
     } finally {
       setLoading(false)
@@ -59,6 +59,23 @@ export default function DashboardPage() {
   useEffect(() => {
     loadTools()
   }, [])
+
+  const handleDeleteTool = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this tool? It will be removed from the marketplace but remain available to existing users.')) return
+
+    try {
+      const res = await fetch(`${REMOTE_API_BASE}/marketplace/tools/${id}`, {
+        method: 'DELETE'
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.message || 'Failed to delete tool')
+      }
+      setTools(tools.filter(t => t.id !== id))
+    } catch (err: any) {
+      alert(err.message)
+    }
+  }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -227,6 +244,34 @@ export default function DashboardPage() {
                     </span>
                   </div>
                 </div>
+                <button 
+                  onClick={() => handleDeleteTool(tool.id)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ef4444',
+                    cursor: 'pointer',
+                    padding: '0.5rem',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    opacity: 0.8,
+                    transition: 'opacity 0.2s ease, background 0.2s ease'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.opacity = '1'
+                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.opacity = '0.8'
+                    e.currentTarget.style.background = 'transparent'
+                  }}
+                >
+                  <Trash2 size={16} /> Delete
+                </button>
               </div>
 
               {/* Metrics Grid */}
@@ -275,3 +320,5 @@ export default function DashboardPage() {
     </div>
   )
 }
+
+

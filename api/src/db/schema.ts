@@ -27,6 +27,7 @@ export const toolStatusEnum = pgEnum('tool_status', [
   'pending',
   'published',
   'rejected',
+  'removed'
 ])
 
 export const eventTypeEnum = pgEnum('event_type', [

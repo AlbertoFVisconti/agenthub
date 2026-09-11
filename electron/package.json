@@ -23,15 +23,31 @@
     },
     "files": [
       "main.js",
-      "preload.js",
-      "../api/dist/**/*",
-      "../api/package.json",
-      "../web/out/**/*"
+      "preload.js"
     ],
     "win": {
       "target": [
         "nsis"
       ]
-    }
-  }
+    },
+    "extraResources": [
+      {
+        "from": "build_stage/api",
+        "to": "api",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../web/out",
+        "to": "web/out",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "compression": "normal"
+  },
+  "description": "AgentHub Desktop App",
+  "author": "AgentHub"
 }

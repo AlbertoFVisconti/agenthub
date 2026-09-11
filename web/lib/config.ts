@@ -1,6 +1,6 @@
-export const LOCAL_API_BASE = process.env.NEXT_PUBLIC_LOCAL_API_BASE || 'http://localhost:8080'
-export const REMOTE_API_BASE = '/api'
+﻿export const LOCAL_API_BASE = process.env.NEXT_PUBLIC_LOCAL_API_BASE || 'http://localhost:8080'
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8081'
+export const REMOTE_API_BASE = API_URL
 
 export function loginWithGithub() {
   if (typeof window !== 'undefined' && (window as any).electron) {

@@ -1,6 +1,7 @@
-packages:
+﻿packages:
   - 'api'
   - 'web'
+  - 'website'
   - 'electron'
   - 'packages/*'
 
@@ -18,3 +19,4 @@ allowBuilds:
   pg: true
   '@google/genai': set this to true or false
   protobufjs: set this to true or false
+

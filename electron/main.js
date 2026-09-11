@@ -1,16 +1,18 @@
 const { app, BrowserWindow, contextBridge, dialog, ipcMain, shell, session } = require('electron')
 const path = require('path')
 const { fork } = require('child_process')
-const spawn = require('cross-spawn')
+let spawn; if (!app.isPackaged) spawn = require('cross-spawn');
 const treeKill = require('tree-kill')
 const fs = require('fs')
 const http = require('http')
 const crypto = require('crypto')
 
 // Load .env from the monorepo root
-const envPath = path.join(__dirname, '../.env')
-if (fs.existsSync(envPath)) {
-  require('dotenv').config({ path: envPath })
+if (!app.isPackaged) {
+  const envPath = path.join(__dirname, '../.env')
+  if (fs.existsSync(envPath)) {
+    require('dotenv').config({ path: envPath })
+  }
 }
 
 let apiProcess = null
@@ -70,7 +72,7 @@ function createWindow() {
     mainWindow.webContents.openDevTools()
   } else {
     // Wait for Next.js server to be ready
-    loadURLWithRetry(mainWindow, 'http://localhost:3000')
+    loadURLWithRetry(mainWindow, 'http://127.0.0.1:8080')
   }
 }
 
@@ -126,7 +128,34 @@ function startApiServer() {
   }
 }
 
+
+const { execSync } = require('child_process');
+
+function checkDockerInstalled() {
+  try {
+    execSync('docker --version', { stdio: 'ignore' });
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
 app.whenReady().then(() => {
+  if (!checkDockerInstalled()) {
+    dialog.showMessageBox({
+      type: 'error',
+      title: 'Docker Required',
+      message: 'AgentHub requires Docker Desktop to run sandboxed tools safely. Please install Docker Desktop and restart the app.',
+      buttons: ['Download Docker', 'Exit']
+    }).then(({ response }) => {
+      if (response === 0) {
+        shell.openExternal('https://www.docker.com/products/docker-desktop/');
+      }
+      app.quit();
+    });
+    return;
+  }
+
   startApiServer()
   createWindow()
 
@@ -242,3 +271,5 @@ app.on('quit', () => {
     apiProcess.kill()
   }
 })
+
+

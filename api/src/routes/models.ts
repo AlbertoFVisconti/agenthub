@@ -33,7 +33,7 @@ const ChatBodySchema = z.object({
 const modelsRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * GET /models/catalogue
-   * Returns the list of available models — no auth needed.
+   * Returns the list of available models â€” no auth needed.
    */
   fastify.get('/models/catalogue', {
     config: { skipSession: true },
@@ -46,20 +46,22 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
    * Runs the full agent loop and streams all events as SSE.
    *
    * Event types:
-   *   {type:"token", content}                         — model text token
-   *   {type:"tool_start", call}                       — about to call a tool
-   *   {type:"tool_result", callId, content, isError}  — tool returned
-   *   {type:"turn_done", usage, turnIndex}             — one model turn done
-   *   {type:"done", totalUsage, turns}                 — entire run finished
-   *   {type:"error", message}                          — fatal error
+   *   {type:"token", content}                         â€” model text token
+   *   {type:"tool_start", call}                       â€” about to call a tool
+   *   {type:"tool_result", callId, content, isError}  â€” tool returned
+   *   {type:"turn_done", usage, turnIndex}             â€” one model turn done
+   *   {type:"done", totalUsage, turns}                 â€” entire run finished
+   *   {type:"error", message}                          â€” fatal error
    *
    * Anonymous users: pass API key as  Authorization: Bearer <key>
    * Authed users:    key fetched from encrypted vault automatically
    */
   fastify.post('/models/chat', {
     handler: async (req, reply) => {
+      const isDesktop = process.env.DEPLOYMENT_MODE === 'desktop'
       const session = req.session
-      if (!session) {
+      
+      if (!session && !isDesktop) {
         return reply.status(401).send({ error: 'NO_SESSION', message: 'No session', statusCode: 401 })
       }
 
@@ -103,7 +105,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      req.log.info({
+      req.log.debug({
         hasWorkspacePath: !!workspacePath,
         userId: req.session?.userId,
         deploymentMode: process.env.DEPLOYMENT_MODE,
@@ -145,7 +147,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
             .where(eq(installs.userId, req.session!.userId))
           }
 
-          req.log.info({ userInstallsLength: userInstalls.length }, '[TRACE] Loaded user installs')
+          req.log.debug({ userInstallsLength: userInstalls.length }, '[TRACE] Loaded user installs')
 
           const fs = await import('node:fs/promises')
           const fsSync = await import('node:fs')
@@ -185,7 +187,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
                   const zip = new AdmZip(tmpZip)
                   zip.extractAllTo(toolDir, true)
                   await fs.rm(tmpZip, { force: true })
-                  req.log.info({ toolId: inst.toolId, version: toolVersion, dir: toolDir }, 'Extracted tool to local cache')
+                  req.log.debug({ toolId: inst.toolId, version: toolVersion, dir: toolDir }, 'Extracted tool to local cache')
                 }
               } catch (err) {
                 req.log.error({ err, toolId: inst.toolId }, 'Failed to download or extract tool package')
@@ -228,7 +230,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
 
       try {
         const allToolsForLog = await executor.listTools()
-        req.log.info({ toolNames: allToolsForLog.map(t => t.name) }, 'tools sent to model')
+        req.log.debug({ toolNames: allToolsForLog.map(t => t.name) }, 'tools sent to model')
       } catch (err) {
         req.log.error({ err }, 'Failed to list/merge tools before starting model')
       }
@@ -243,10 +245,10 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
       // Warn on unknown models but don't block (power users)
       const known = MODEL_CATALOGUE.map(m => m.id as string)
       if (!known.includes(model)) {
-        req.log.warn({ model }, 'Unknown model ID — passing through to provider')
+        req.log.warn({ model }, 'Unknown model ID â€” passing through to provider')
       }
 
-      req.log.info({
+      req.log.debug({
         deploymentMode: process.env.DEPLOYMENT_MODE,
         provider,
         userId: session.userId,
@@ -261,7 +263,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
         headerKey:   req.anonymousApiKey,
       })
 
-      req.log.info({
+      req.log.debug({
         resolvedApiKey: apiKey ? "FOUND" : "NOT_FOUND"
       }, '[TRACE] /models/chat API key resolution result')
 
@@ -326,3 +328,4 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
 }
 
 export default modelsRoutes
+

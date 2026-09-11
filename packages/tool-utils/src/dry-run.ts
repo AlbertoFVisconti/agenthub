@@ -1,4 +1,23 @@
-import { spawn } from 'node:child_process'
+﻿import { spawn, execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+
+const execFileAsync = promisify(execFile)
+
+/**
+ * Checks if Docker is installed and the daemon is running.
+ * Returns { available: boolean, error?: string }
+ */
+export async function checkDockerAvailable(): Promise<{ available: boolean, error?: string }> {
+  try {
+    await execFileAsync('docker', ['info'])
+    return { available: true }
+  } catch (err: any) {
+    return { 
+      available: false, 
+      error: err.stderr || err.message || String(err)
+    }
+  }
+}
 
 /**
  * Runs a dry-run test of an MCP tool in a Docker container.
@@ -7,10 +26,6 @@ import { spawn } from 'node:child_process'
  */
 export async function runMcpDryRun(codeDir: string, entrypoint: string[]): Promise<boolean> {
   return new Promise((resolve) => {
-    // Basic Phase 4 isolation: run in a container, mount the code directory.
-    // Assuming Node.js based tools for this prototype, so we use `node:20-alpine`.
-    // In a real system, the manifest might specify the runtime, or the tool is already a docker image.
-    // For this marketplace, we'll use a generic node image and run the entrypoint.
     const proc = spawn('docker', [
       'run', '-i', '--rm',
       '--memory=256m',
@@ -38,9 +53,8 @@ export async function runMcpDryRun(codeDir: string, entrypoint: string[]): Promi
         proc.kill()
         resolve(false)
       }
-    }, 10000) // 10s timeout for boot
+    }, 10000)
 
-    // MCP initialize request
     const initRequest = {
       jsonrpc: '2.0',
       id: 1,
@@ -57,9 +71,8 @@ export async function runMcpDryRun(codeDir: string, entrypoint: string[]): Promi
       if (resolved) return
       buffer += data.toString()
       
-      // Try to parse lines of JSON
       const lines = buffer.split('\n')
-      buffer = lines.pop() || '' // keep the incomplete line in buffer
+      buffer = lines.pop() || '' 
 
       for (const line of lines) {
         if (!line.trim()) continue
@@ -72,9 +85,7 @@ export async function runMcpDryRun(codeDir: string, entrypoint: string[]): Promi
             resolve(true)
             return
           }
-        } catch {
-          // ignore parsing errors for intermediate non-JSON output
-        }
+        } catch {}
       }
     })
 
@@ -94,7 +105,6 @@ export async function runMcpDryRun(codeDir: string, entrypoint: string[]): Promi
       }
     })
 
-    // Send init request
     proc.stdin.write(JSON.stringify(initRequest) + '\n')
   })
 }

@@ -8,7 +8,6 @@ const __dirname = path.dirname(__filename)
 
 // Load root .env
 config({ path: path.join(__dirname, '../../.env') })
-console.log('GITHUB_CLIENT_ID is set:', !!process.env.GITHUB_CLIENT_ID)
 
 import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
@@ -45,7 +44,7 @@ async function buildServer() {
     },
   })
 
-  // ── Security ────────────────────────────────────────────────
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Security Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   await fastify.register(helmet, {
     contentSecurityPolicy: {
       directives: {
@@ -64,38 +63,43 @@ async function buildServer() {
   await fastify.register(cors, {
     // In dev, Next.js dev server proxies /api/* so CORS is same-origin.
     // In production, set CORS_ORIGIN env var to the deployed frontend URL.
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001', 'http://localhost:8080', 'http://127.0.0.1:8080'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   })
 
-  // ── Cookies ─────────────────────────────────────────────────
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Cookies Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   await fastify.register(cookie as any, {
     secret: process.env.SESSION_SECRET ?? 'dev-secret-change-me',
   })
 
-  // ── Multipart ───────────────────────────────────────────────
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Multipart Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   await fastify.register(multipart, {
     limits: {
       fileSize: 50 * 1024 * 1024, // 50MB max upload
     },
   })
 
-  // ── Session (anonymous user creation on first visit) ─────────
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Session (anonymous user creation on first visit) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   await fastify.register(sessionPlugin)
 
-  // ── Background Jobs ───────────────────────────────────────────
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Background Jobs Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   await fastify.register(reaperPlugin)
 
-  // ── Network Tab Debugging Hook ────────────────────────────────
-  fastify.addHook('onResponse', (request, reply, done) => {
-    console.log(`[NETWORK TAB] URL: ${request.url} | Status: ${reply.statusCode} | Content-Type: ${reply.getHeader('content-type') || 'none'}`)
-    done()
+  // 🌐 Network Tab Debugging Hook 
+  fastify.addHook('onRequest', async (request, reply) => {
+    // console.log(`[${request.method}] ${request.url}`)
   })
 
-  // ── Routes ────────────────────────────────────────────────────
+  // 🚀 Routes 
   await fastify.register(healthRoute)
-  await fastify.register(authRoutes)
+  
+  if (process.env.DEPLOYMENT_MODE !== 'desktop') {
+    await fastify.register(authRoutes)
+    const marketplaceRoutes = await import('./routes/marketplace.js')
+    await fastify.register(marketplaceRoutes.default)
+    await fastify.register(creatorRoutes)
+  }
   
   if (process.env.DEPLOYMENT_MODE === 'desktop') {
     await fastify.register(modelsRoutes)
@@ -103,17 +107,12 @@ async function buildServer() {
     await fastify.register(dockerRoutes)
     await fastify.register(historyRoutes, { prefix: '/history' })
   }
-  
-  const marketplaceRoutes = await import('./routes/marketplace.js')
-  await fastify.register(marketplaceRoutes.default)
-  await fastify.register(creatorRoutes)
 
-  // ── Desktop Static Serving ──────────────────────────────────────
+  // Ã¢â€ â‚¬Ã¢â€ â‚¬ Desktop Static Serving Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬
   // If running in Desktop mode, serve the Next.js static export
   const webOutDir = path.resolve(__dirname, '../../web/out')
-  console.log(`[DEBUG] Resolving static root to: ${webOutDir}`)
 
-  if (fs.existsSync(webOutDir)) {
+  if (process.env.DEPLOYMENT_MODE === 'desktop' && fs.existsSync(webOutDir)) {
     // Serve static files (wildcard: true is default and will serve / -> index.html)
     await fastify.register(fastifyStatic, {
       root: webOutDir,
@@ -184,13 +183,13 @@ async function start() {
   try {
     const bindHost = process.env.DEPLOYMENT_MODE === 'cloud' ? '0.0.0.0' : '127.0.0.1'
     await fastify.listen({ port: PORT, host: bindHost })
-    fastify.log.info(`🚀 AgentHub API running on http://${bindHost}:${PORT}`)
+    fastify.log.info(`Ã°Å¸Å¡â‚¬ AgentHub API running on http://${bindHost}:${PORT}`)
   } catch (err: any) {
     if (err.code === 'EADDRINUSE') {
-      console.error(`\n❌ ERROR: Port ${PORT} is already in use on ${process.env.DEPLOYMENT_MODE === 'cloud' ? '0.0.0.0' : '127.0.0.1'}.`)
+      console.error(`\nÃ¢ÂÅ’ ERROR: Port ${PORT} is already in use on ${process.env.DEPLOYMENT_MODE === 'cloud' ? '0.0.0.0' : '127.0.0.1'}.`)
       console.error('Make sure no other instances of AgentHub or other services are running on this port.\n')
     } else {
-      console.error('\n❌ ERROR: Failed to start API server:', err.message, '\n')
+      console.error('\nÃ¢ÂÅ’ ERROR: Failed to start API server:', err.message, '\n')
     }
     fastify.log.error(err)
     process.exit(1)
@@ -202,3 +201,6 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 export { buildServer }
+
+
+

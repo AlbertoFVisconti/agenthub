@@ -1,0 +1,11 @@
+{
+  "name": "create-agenthub-tool",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "create-agenthub-tool": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  }
+}

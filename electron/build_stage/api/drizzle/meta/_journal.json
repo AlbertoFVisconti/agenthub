@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1785006842601,
+      "tag": "0000_redundant_the_call",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788119352407,
+      "tag": "0001_chilly_kronos",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788468275397,
+      "tag": "0002_even_puck",
+      "breakpoints": true
+    }
+  ]
+}
