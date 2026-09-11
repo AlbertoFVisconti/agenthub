@@ -52,7 +52,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       if (!parsedManifest.success) {
         return reply.status(400).send({ 
           error: 'INVALID_MANIFEST', 
-          message: parsedManifest.error.issues.map(i => i.message).join(', ') 
+          message: parsedManifest.error.issues.map((i: any) => i.message).join(', ') 
         })
       }
       const manifest = parsedManifest.data
