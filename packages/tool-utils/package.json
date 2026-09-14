@@ -1,5 +1,5 @@
 {
-  "name": "@agenthub/tool-utils",
+  "name": "@agenthub-tools/tool-utils",
   "version": "1.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "zod": "^3.23.8",
-    "@agenthub/tool-sdk": "file:../tool-sdk"
+    "@agenthub-tools/tool-sdk": "file:../tool-sdk"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
