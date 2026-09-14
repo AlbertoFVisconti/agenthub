@@ -1,4 +1,4 @@
-﻿import Link from 'next/link'
+import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
 export default function CreateToolGuide() {
@@ -48,8 +48,7 @@ export default function CreateToolGuide() {
             Then navigate into your new folder and install the dependencies:
           </p>
           <pre style={{ backgroundColor: '#111', border: '1px solid #333', padding: '1rem', borderRadius: '8px', overflowX: 'auto', color: '#e5e7eb' }}>
-            <code>cd word-counter
-npm install</code>
+            <code>cd word-counter{'\n'}npm install</code>
           </pre>
         </section>
 
@@ -72,18 +71,18 @@ npm install</code>
           <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#fff', marginBottom: '0.5rem' }}>manifest.json</h3>
           <p style={{ color: 'hsl(220 15% 75%)', marginBottom: '1rem' }}>Define the name, version, and a clear description so users know what your tool does.</p>
           <pre style={{ backgroundColor: '#111', border: '1px solid #333', padding: '1rem', borderRadius: '8px', overflowX: 'auto', color: '#e5e7eb', fontSize: '0.9rem' }}>
-            <code>{\{
+            <code>{`{
   "name": "word-counter",
   "version": "1.0.0",
   "description": "A tool that counts the number of words in a provided text string.",
   "main": "index.js"
-}\}</code>
+}`}</code>
           </pre>
 
           <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#fff', marginBottom: '0.5rem', marginTop: '1.5rem' }}>index.js</h3>
           <p style={{ color: 'hsl(220 15% 75%)', marginBottom: '1rem' }}>Use <code>defineTool</code> from the SDK to declare your input schema and the handler function.</p>
           <pre style={{ backgroundColor: '#111', border: '1px solid #333', padding: '1rem', borderRadius: '8px', overflowX: 'auto', color: '#e5e7eb', fontSize: '0.9rem' }}>
-            <code>{\import { defineTool } from '@agenthub-tools/tool-sdk'
+            <code>{`import { defineTool } from '@agenthub-tools/tool-sdk'
 import { z } from 'zod'
 
 export default defineTool({
@@ -96,10 +95,10 @@ export default defineTool({
     const wordCount = text.trim().split(/\\s+/).length
     return {
       success: true,
-      data: \\\The text contains \\\ words.\\\
+      data: \`The text contains \${wordCount} words.\`
     }
   }
-})\}</code>
+})`}</code>
           </pre>
         </section>
 
