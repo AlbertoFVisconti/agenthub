@@ -1,5 +1,5 @@
 {
-  "name": "@agenthub/api",
+  "name": "@agenthub-tools/api",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -15,8 +15,8 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@agenthub/tool-utils": "workspace:*",
-    "@agenthub/types": "workspace:*",
+    "@agenthub-tools/tool-utils": "workspace:*",
+    "@agenthub-tools/types": "workspace:*",
     "@fastify/cookie": "^9.4.0",
     "@fastify/cors": "^8.5.0",
     "@fastify/helmet": "^11.1.1",

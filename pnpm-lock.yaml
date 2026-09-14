@@ -20,10 +20,10 @@ importers:
 
   api:
     dependencies:
-      '@agenthub/tool-utils':
+      '@agenthub-tools/tool-utils':
         specifier: workspace:*
         version: link:../packages/tool-utils
-      '@agenthub/types':
+      '@agenthub-tools/types':
         specifier: workspace:*
         version: link:../packages/types
       '@fastify/cookie':
@@ -135,7 +135,7 @@ importers:
 
   packages/tool-cli:
     dependencies:
-      '@agenthub/tool-utils':
+      '@agenthub-tools/tool-utils':
         specifier: workspace:*
         version: link:../tool-utils
       adm-zip:
@@ -159,7 +159,7 @@ importers:
 
   packages/tool-utils:
     dependencies:
-      '@agenthub/tool-sdk':
+      '@agenthub-tools/tool-sdk':
         specifier: file:../tool-sdk
         version: link:../tool-sdk
       zod:
@@ -188,7 +188,7 @@ importers:
 
   web:
     dependencies:
-      '@agenthub/types':
+      '@agenthub-tools/types':
         specifier: workspace:*
         version: link:../packages/types
       '@radix-ui/react-avatar':
@@ -264,7 +264,7 @@ importers:
 
   website:
     dependencies:
-      '@agenthub/types':
+      '@agenthub-tools/types':
         specifier: workspace:*
         version: link:../packages/types
       '@radix-ui/react-avatar':

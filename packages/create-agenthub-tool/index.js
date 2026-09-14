@@ -23,11 +23,11 @@ const packageJson = {
   version: "1.0.0",
   type: "module",
   dependencies: {
-    "@agenthub/tool-sdk": "latest"
+    "@agenthub-tools/tool-sdk": "latest"
   }
 }
 
-const indexJs = `import { defineTool } from '@agenthub/tool-sdk'
+const indexJs = `import { defineTool } from '@agenthub-tools/tool-sdk'
 
 defineTool({
   name: '${toolName}',
@@ -49,11 +49,11 @@ const readmeMd = `# ${toolName}
 An AgentHub tool.
 
 ## Testing Locally
-Run \`npx @agenthub/tool-cli validate\` to validate your manifest.
-Run \`npx @agenthub/tool-cli test\` to test your tool locally using Docker.
+Run \`npx @agenthub-tools/tool-cli validate\` to validate your manifest.
+Run \`npx @agenthub-tools/tool-cli test\` to test your tool locally using Docker.
 
 ## Publishing
-Run \`npx @agenthub/tool-cli package\` to bundle your tool into a zip file.
+Run \`npx @agenthub-tools/tool-cli package\` to bundle your tool into a zip file.
 Upload the resulting \`<name>-<version>.zip\` directly through the AgentHub Marketplace Dashboard.
 `
 

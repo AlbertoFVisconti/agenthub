@@ -5,7 +5,7 @@ const { result, commands } = concurrently(
   [
     { command: 'pnpm --filter web dev', name: 'web', prefixColor: 'blue' },
     { command: 'pnpm --filter api dev', name: 'api', prefixColor: 'yellow' },
-    { command: 'pnpm --filter @agenthub/desktop start', name: 'desktop', prefixColor: 'green' }
+    { command: 'pnpm --filter @agenthub-tools/desktop start', name: 'desktop', prefixColor: 'green' }
   ],
   {
     prefix: 'name',

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { MODEL_CATALOGUE } from '@agenthub/types'
-import type { NormalizedMessage, AgentEvent } from '@agenthub/types'
+import { MODEL_CATALOGUE } from '@agenthub-tools/types'
+import type { NormalizedMessage, AgentEvent } from '@agenthub-tools/types'
 import { useSession } from '@/lib/session-context'
 import { getStoredKey } from '@/app/settings/key-settings'
 import { MessageList } from './message-list'

@@ -1,4 +1,4 @@
-﻿packages:
+packages:
   - 'api'
   - 'web'
   - 'website'
@@ -6,8 +6,8 @@
   - 'packages/*'
 
 approved-builds:
-  - '@agenthub/api'
-  - '@agenthub/web'
+  - '@agenthub-tools/api'
+  - '@agenthub-tools/web'
   - 'electron'
   - 'packages/*'
 

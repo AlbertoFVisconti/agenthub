@@ -20,7 +20,7 @@
     ],
     "paths": {
       "@/*": ["./*"],
-      "@agenthub/types": ["../packages/types/src/index.ts"]
+      "@agenthub-tools/types": ["../packages/types/src/index.ts"]
     }
   },
   "include": [

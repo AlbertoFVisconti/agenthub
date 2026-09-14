@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { McpManifestSchema, runMcpDryRun } from '@agenthub/tool-utils'
+import { McpManifestSchema, runMcpDryRun } from '@agenthub-tools/tool-utils'
 import { build } from 'esbuild'
 
 const cmd = process.argv[2]
@@ -59,7 +59,7 @@ async function test() {
   }
 
   // Check docker first
-  const { checkDockerAvailable } = await import('@agenthub/tool-utils')
+  const { checkDockerAvailable } = await import('@agenthub-tools/tool-utils')
   const dockerStatus = await checkDockerAvailable()
   if (!dockerStatus.available) {
     console.error('Docker Desktop doesn\'t appear to be running. Please start Docker Desktop and try again.')

@@ -56,6 +56,15 @@ function Navbar() {
           }}>
             <Store size={15} /> Marketplace
           </Link>
+          <Link href="/docs" style={{
+            display: 'flex', alignItems: 'center', gap: '0.4rem',
+            padding: '0.4rem 0.75rem', borderRadius: '8px',
+            fontSize: '0.875rem', fontWeight: 500,
+            textDecoration: 'none', color: '#fff',
+            transition: 'all 0.15s ease',
+          }}>
+            Documentation
+          </Link>
         </div>
 
         {/* Right: Actions */}

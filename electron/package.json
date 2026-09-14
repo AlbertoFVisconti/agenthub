@@ -1,5 +1,5 @@
 {
-  "name": "@agenthub/desktop",
+  "name": "@agenthub-tools/desktop",
   "version": "0.0.1",
   "main": "main.js",
   "scripts": {
