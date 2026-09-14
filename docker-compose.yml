@@ -23,7 +23,7 @@ services:
     container_name: agenthub-pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@agenthub.local
+      PGADMIN_DEFAULT_EMAIL: admin@agenthub-tools.local
       PGADMIN_DEFAULT_PASSWORD: admin
     ports:
       - "5050:80"

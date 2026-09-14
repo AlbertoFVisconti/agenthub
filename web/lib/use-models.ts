@@ -1,5 +1,5 @@
-﻿import { useState, useEffect } from 'react'
-import { MODEL_CATALOGUE } from '@agenthub/types'
+import { useState, useEffect } from 'react'
+import { MODEL_CATALOGUE } from '@agenthub-tools/types'
 
 export type ModelEntry = {
   provider: string

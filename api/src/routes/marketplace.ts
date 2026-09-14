@@ -6,7 +6,7 @@ import AdmZip from 'adm-zip'
 import { eq, and, sql } from 'drizzle-orm'
 import { getDb } from '../db/index.js'
 import { tools, toolVersions, installs } from '../db/schema.js'
-import { McpManifestSchema, runMcpDryRun, checkDockerAvailable } from '@agenthub/tool-utils'
+import { McpManifestSchema, runMcpDryRun, checkDockerAvailable } from '@agenthub-tools/tool-utils'
 import '@fastify/multipart'
 
 const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {

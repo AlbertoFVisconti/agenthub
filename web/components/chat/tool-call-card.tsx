@@ -1,8 +1,8 @@
-﻿'use client'
+'use client'
 
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, Wrench, CheckCircle, AlertTriangle, Loader, ShieldAlert } from 'lucide-react'
-import type { ToolCall } from '@agenthub/types'
+import type { ToolCall } from '@agenthub-tools/types'
 import { LOCAL_API_BASE } from '../../lib/config'
 
 export interface ToolCallState {

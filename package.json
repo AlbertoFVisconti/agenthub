@@ -5,9 +5,9 @@
   "scripts": {
     "dev": "pnpm run --parallel --filter web --filter api dev",
     "dev:web": "pnpm --filter web dev",
-    "dev:website": "pnpm --filter @agenthub/website dev",
+    "dev:website": "pnpm --filter @agenthub-tools/website dev",
     "dev:api": "pnpm --filter api dev",
-    "dev:desktop": "pnpm --filter @agenthub/desktop start",
+    "dev:desktop": "pnpm --filter @agenthub-tools/desktop start",
     "start": "node scripts/start.js",
     "build": "pnpm run --filter web --filter api build",
     "typecheck": "pnpm run --recursive typecheck",
