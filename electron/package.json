@@ -18,6 +18,7 @@
   "build": {
     "appId": "com.agenthub.desktop",
     "productName": "AgentHub",
+    "artifactName": "${productName}-Setup-${version}.${ext}",
     "directories": {
       "output": "dist"
     },

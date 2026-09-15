@@ -266,7 +266,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
         isAnonymous: activeIsAnonymous,
         userId:      activeUserId,
         provider:    provider as ModelProvider,
-        headerKey:   req.anonymousApiKey,
+        headerKey:   req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7).trim() : null,
       })
 
       req.log.debug({

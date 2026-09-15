@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { BarChart3, Activity, AlertCircle, Download, Package, ChevronRight, LayoutDashboard, Loader2, Trash2 } from 'lucide-react'
@@ -29,14 +29,14 @@ export default function DashboardPage() {
 
   const loadTools = async () => {
     try {
-      const res = await fetch(`${REMOTE_API_BASE}/creator/tools`)
+      const res = await fetch(`${REMOTE_API_BASE}/creator/tools`, { credentials: 'include' })
       if (!res.ok) throw new Error('Unauthorized')
       const data = await res.json()
       if (data.tools) {
         const toolsWithMetrics = await Promise.all(
           data.tools.map(async (tool: Tool) => {
             try {
-              const metricRes = await fetch(`${REMOTE_API_BASE}/creator/tools/${tool.id}/metrics`)
+              const metricRes = await fetch(`${REMOTE_API_BASE}/creator/tools/${tool.id}/metrics`, { credentials: 'include' })
               if (metricRes.ok) {
                 tool.metrics = await metricRes.json()
               }
@@ -65,7 +65,8 @@ export default function DashboardPage() {
 
     try {
       const res = await fetch(`${REMOTE_API_BASE}/marketplace/tools/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        credentials: 'include'
       })
       if (!res.ok) {
         const data = await res.json()
@@ -91,6 +92,7 @@ export default function DashboardPage() {
       const res = await fetch(`${REMOTE_API_BASE}/marketplace/publish`, {
         method: 'POST',
         body: formData,
+        credentials: 'include'
       })
       const data = await res.json()
 

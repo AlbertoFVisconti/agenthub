@@ -68,11 +68,12 @@ export function ModelSelector({ provider, model, onChange, disabled }: ModelSele
           {/* Backdrop */}
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
           {/* Dropdown */}
-          <div style={{
+          <div className="model-dropdown-scroll" style={{
             position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50,
             background: 'hsl(225 22% 11%)', border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: '12px', padding: '0.5rem', minWidth: '260px',
             boxShadow: '0 16px 40px rgba(0,0,0,0.5)',
+            maxHeight: '60vh', overflowY: 'auto'
           }}>
             {Object.entries(grouped).map(([prov, models]) => (
               <div key={prov}>

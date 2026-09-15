@@ -1,0 +1,6 @@
+1:"$Sreact.fragment"
+2:I[48437,["/_next/static/chunks/2311cpzq90w6m.js","/_next/static/chunks/3nbxayvxtqdw7.js","/_next/static/chunks/44q8uosenprgk.js","/_next/static/chunks/0lsgrmcuzcg4m.js"],"KeySettings"]
+3:I[6886,["/_next/static/chunks/2311cpzq90w6m.js","/_next/static/chunks/3nbxayvxtqdw7.js"],"OutletBoundary"]
+4:"$Sreact.suspense"
+0:{"rsc":["$","$1","c",{"children":[[["$","h1",null,{"style":{"fontSize":"1.75rem","fontWeight":800,"color":"#fff","letterSpacing":"-0.02em","marginBottom":"0.5rem"},"children":"API Keys"}],["$","p",null,{"style":{"color":"hsl(220 15% 55%)","marginBottom":"2.5rem","fontSize":"0.9rem"},"children":"Your API keys are stored locally in this browser only — never sent to our servers while you're anonymous."}],["$","$L2",null,{}]],[["$","script","script-0",{"src":"/_next/static/chunks/0lsgrmcuzcg4m.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"N1rnk1ag5ASUG0tPc9uhg"}
+5:null

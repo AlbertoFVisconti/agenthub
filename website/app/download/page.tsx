@@ -1,4 +1,4 @@
-﻿import Link from 'next/link'
+import Link from 'next/link'
 import { Download, ArrowLeft, Monitor, Terminal } from 'lucide-react'
 
 export default function DownloadPage() {
@@ -16,9 +16,8 @@ export default function DownloadPage() {
         </p>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '3rem' }}>
-          {/* Windows Download */}
           <a 
-            href="https://github.com/AlbertoFVisconti/agenthub/releases/latest/download/AgentHub.Setup.0.0.1.exe" 
+            href="https://github.com/AlbertoFVisconti/agenthub/releases/latest/download/AgentHub-Setup-0.0.1.exe" 
             style={{ 
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', 
               padding: '1rem', borderRadius: '12px', fontSize: '1.1rem', fontWeight: 600, 
@@ -27,19 +26,8 @@ export default function DownloadPage() {
             }}
             className="hover-lift"
           >
-            <Monitor size={20} /> Download for Windows (.exe)
+            <Download size={20} /> Download AgentHub
           </a>
-          
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            {/* Mac Placeholder */}
-            <button disabled style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '12px', fontSize: '0.95rem', fontWeight: 500, backgroundColor: 'rgba(255,255,255,0.05)', color: 'hsl(220 15% 40%)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'not-allowed' }}>
-              Mac (Coming Soon)
-            </button>
-            {/* Linux Placeholder */}
-            <button disabled style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '12px', fontSize: '0.95rem', fontWeight: 500, backgroundColor: 'rgba(255,255,255,0.05)', color: 'hsl(220 15% 40%)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'not-allowed' }}>
-              <Terminal size={16} /> Linux (Coming Soon)
-            </button>
-          </div>
         </div>
 
         <Link href="/" className="btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>

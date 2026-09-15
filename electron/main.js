@@ -192,7 +192,7 @@ ipcMain.handle('dialog:pickProjectFolder', async () => {
 
 ipcMain.handle('auth:login', async () => {
   const state = crypto.randomBytes(16).toString('hex')
-  const remoteApiBase = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8081'
+  const remoteApiBase = process.env.NEXT_PUBLIC_API_URL || 'https://agenthub-hopa.onrender.com'
   
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
@@ -218,14 +218,14 @@ ipcMain.handle('auth:login', async () => {
             throw new Error('No token provided in callback')
           }
           
-          // Set cookie for the UI origin
+          // Set cookie for the remote API origin so fetch(REMOTE_API_BASE) includes it
           const cookie = {
-            url: 'http://localhost:3000',
+            url: remoteApiBase,
             name: 'device_id',
             value: token,
             httpOnly: true,
-            secure: false,
-            sameSite: 'lax',
+            secure: remoteApiBase.startsWith('https'),
+            sameSite: 'no_restriction',
             path: '/'
           }
           
