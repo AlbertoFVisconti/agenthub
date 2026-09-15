@@ -17,7 +17,7 @@ export default function DownloadPage() {
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '3rem' }}>
           <a 
-            href="https://github.com/AlbertoFVisconti/agenthub/releases/latest/download/AgentHub-Setup-0.0.1.exe" 
+            href="https://www.dropbox.com/scl/fi/61d4jgh8bq85c55yqgct6/AgentHub-Setup-0.0.1.exe?rlkey=noj7zqsmng157yy6bvsud9nlo&st=l0w21dgy&e=2&dl=1" 
             style={{ 
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', 
               padding: '1rem', borderRadius: '12px', fontSize: '1.1rem', fontWeight: 600, 
