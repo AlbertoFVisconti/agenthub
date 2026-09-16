@@ -12,10 +12,11 @@ WORKDIR /app
 COPY . .
 
 # Install dependencies
+ENV CI=true
 RUN pnpm install --frozen-lockfile
 
 # Build the API workspace (and any local dependencies)
-RUN pnpm --filter @agenthub-tools/api build
+RUN pnpm --filter @agenthub-tools/api... build
 
 # Prune the workspace to just the API and its production dependencies
 # This creates a standalone folder with only what's needed to run
