@@ -6,6 +6,7 @@ export type ModelEntry = {
   id: string
   label: string
   tier: string
+  baseUrl?: string
 }
 
 export function useModelCatalogue() {

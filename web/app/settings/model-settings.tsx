@@ -110,7 +110,8 @@ function ModelForm({ initial, onSave, onCancel }: { initial: ModelEntry, onSave:
         options={[
           { value: 'openai', label: 'OpenAI' },
           { value: 'anthropic', label: 'Anthropic' },
-          { value: 'google', label: 'Google' }
+          { value: 'google', label: 'Google' },
+          { value: 'custom', label: 'Custom' }
         ]}
       />
       
@@ -123,6 +124,13 @@ function ModelForm({ initial, onSave, onCancel }: { initial: ModelEntry, onSave:
         type="text" placeholder="Display Name" value={model.label} onChange={e => setModel({...model, label: e.target.value})}
         style={{ flex: 1, minWidth: '150px', background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', padding: '0.5rem', borderRadius: '6px', colorScheme: 'dark' }}
       />
+      
+      {model.provider === 'custom' && (
+        <input 
+          type="text" placeholder="Base URL (e.g. http://127.0.0.1:11434/v1)" value={model.baseUrl || ''} onChange={e => setModel({...model, baseUrl: e.target.value})}
+          style={{ flex: 1, minWidth: '200px', background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', padding: '0.5rem', borderRadius: '6px', colorScheme: 'dark' }}
+        />
+      )}
       
       <CustomSelect
         value={model.tier} onChange={val => setModel({...model, tier: val})}
@@ -167,7 +175,7 @@ function CustomSelect({
         }}
       >
         {selected?.label ?? value}
-        <span style={{ fontSize: '0.7em', opacity: 0.5 }}>?</span>
+        <span style={{ fontSize: '0.7em', opacity: 0.5 }}>▼</span>
       </div>
       
       {open && (

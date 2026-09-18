@@ -73,10 +73,14 @@ export class OpenAIAdapter implements ModelAdapter {
 
     let res: Response
     try {
-      const baseUrl = process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1'
+      let baseUrl = params.baseUrl || process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1'
+      
+      // Auto-detect Groq keys (gsk_...) and switch to Groq's OpenAI-compatible endpoint
+      if (resolvedApiKey.startsWith('gsk_')) {
+        baseUrl = 'https://api.groq.com/openai/v1'
+      }
+
       const endpoint = `${baseUrl.replace(/\/$/, '')}/chat/completions`
-      
-      
       res = await fetch(endpoint, {
         method: 'POST',
         headers: {

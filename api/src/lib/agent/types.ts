@@ -59,4 +59,5 @@ export interface AgentRunParams {
   maxTurns?:    number
   /** Callback fired when a tool requires confirmation. Loop awaits the returned boolean. */
   onConfirm?:   (callId: string) => Promise<boolean>
+  baseUrl?:     string
 }

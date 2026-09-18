@@ -104,6 +104,7 @@ function startApiServer() {
     const apiPath = path.join(process.resourcesPath, 'api', 'dist', 'index.js')
     console.log('Starting API in production at:', apiPath)
     apiProcess = fork(apiPath, [], {
+      stdio: 'pipe',
       env: {
         ...process.env,
         NODE_ENV: 'production',
@@ -114,6 +115,24 @@ function startApiServer() {
   }
 
   if (apiProcess) {
+    let logBuffer = []
+
+    if (apiProcess.stdout) {
+      apiProcess.stdout.on('data', (data) => {
+        console.log(`[API] ${data}`)
+        logBuffer.push(data.toString())
+        if (logBuffer.length > 50) logBuffer.shift()
+      })
+    }
+
+    if (apiProcess.stderr) {
+      apiProcess.stderr.on('data', (data) => {
+        console.error(`[API ERR] ${data}`)
+        logBuffer.push(data.toString())
+        if (logBuffer.length > 50) logBuffer.shift()
+      })
+    }
+
     apiProcess.on('error', (err) => {
       console.error('API Process Error:', err)
       dialog.showErrorBox('API Process Error', `The local API process encountered an error:\n${err.message}`)
@@ -122,7 +141,7 @@ function startApiServer() {
     apiProcess.on('exit', (code) => {
       console.log('API Process Exited with code:', code)
       if (code !== 0 && code !== null) {
-        dialog.showErrorBox('API Process Crashed', `The local API process exited unexpectedly with code ${code}. Check the terminal logs.`)
+        dialog.showErrorBox('API Process Crashed', `The local API process exited unexpectedly with code ${code}.\n\nLast logs:\n${logBuffer.join('').slice(-1000)}`)
       }
     })
   }
@@ -192,7 +211,7 @@ ipcMain.handle('dialog:pickProjectFolder', async () => {
 
 ipcMain.handle('auth:login', async () => {
   const state = crypto.randomBytes(16).toString('hex')
-  const remoteApiBase = process.env.NEXT_PUBLIC_API_URL || 'https://agenthub-hopa.onrender.com'
+  const remoteApiBase = process.env.NEXT_PUBLIC_API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
   
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {

@@ -1,4 +1,4 @@
-﻿import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { getAdapter, resolveApiKey } from '../lib/models/gateway.js'
 import type { NormalizedMessage, ModelProvider } from '../lib/models/types.js'
@@ -16,7 +16,7 @@ import { eq } from 'drizzle-orm'
 import { installs, tools, toolEvents } from '../db/schema.js'
 
 const ChatBodySchema = z.object({
-  provider:     z.enum(['anthropic', 'openai', 'google']),
+  provider:     z.enum(['anthropic', 'openai', 'google', 'custom']),
   model:        z.string().min(1),
   messages:     z.array(z.object({
     role:        z.enum(['user', 'assistant', 'tool']),
@@ -28,6 +28,7 @@ const ChatBodySchema = z.object({
   maxTokens:    z.number().int().min(1).max(32000).optional(),
   maxTurns:     z.number().int().min(1).max(20).optional(),
   workspacePath: z.string().optional(),
+  baseUrl:      z.string().optional(),
 })
 
 const modelsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -58,8 +59,10 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.post('/models/chat', {
     handler: async (req, reply) => {
+      const isDesktop = process.env.DEPLOYMENT_MODE === 'desktop'
       const session = req.session
-      if (!session) {
+      
+      if (!session && !isDesktop) {
         return reply.status(401).send({ error: 'NO_SESSION', message: 'No session', statusCode: 401 })
       }
 
@@ -72,7 +75,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      const { provider, model, messages, systemPrompt, maxTokens, maxTurns, workspacePath } = parsed.data
+      const { provider, model, messages, systemPrompt, maxTokens, maxTurns, workspacePath, baseUrl } = parsed.data
 
       let executor: import('../lib/agent/types.js').ToolExecutor = new NoopExecutor()
       
@@ -116,7 +119,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
           let userInstalls: { toolId: string, packageUrl: string | null, manifestJson: unknown }[] = []
 
           if (process.env.DEPLOYMENT_MODE === 'desktop') {
-            const CLOUD_API_URL = process.env.API_URL || 'http://127.0.0.1:8081'
+            const CLOUD_API_URL = process.env.API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
             try {
               const res = await fetch(`${CLOUD_API_URL}/marketplace/installs`, {
                 headers: {
@@ -134,6 +137,9 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
               req.log.error({ err }, 'Network error fetching installs from Cloud API')
             }
           } else {
+            if (!req.session) {
+              return reply.status(401).send({ error: 'UNAUTHORIZED', message: 'Session required in cloud mode' })
+            }
             const db = getDb()
             userInstalls = await db.select({
               toolId: installs.toolId,
@@ -142,7 +148,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
             })
             .from(installs)
             .innerJoin(tools, eq(installs.toolId, tools.id))
-            .where(eq(installs.userId, req.session!.userId))
+            .where(eq(installs.userId, req.session.userId))
           }
 
           req.log.debug({ userInstallsLength: userInstalls.length }, '[TRACE] Loaded user installs')
@@ -171,7 +177,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
             if (process.env.DEPLOYMENT_MODE === 'desktop') {
               try {
                 if (!fsSync.existsSync(toolDir)) {
-                  const CLOUD_API_URL = process.env.API_URL || 'http://127.0.0.1:8081'
+                  const CLOUD_API_URL = process.env.API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
                   const dlRes = await fetch(`${CLOUD_API_URL}${inst.packageUrl}`)
                   if (!dlRes.ok) {
                     req.log.error({ status: dlRes.status, url: inst.packageUrl }, 'Failed to download tool zip')
@@ -246,19 +252,22 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
         req.log.warn({ model }, 'Unknown model ID â€” passing through to provider')
       }
 
+      const activeUserId = session ? session.userId : 'desktop-user'
+      const activeIsAnonymous = session ? session.isAnonymous : true
+
       req.log.debug({
         deploymentMode: process.env.DEPLOYMENT_MODE,
         provider,
-        userId: session.userId,
-        isAnonymous: session.isAnonymous,
+        userId: activeUserId,
+        isAnonymous: activeIsAnonymous,
         authorizationHeaderPresent: !!req.anonymousApiKey
       }, '[TRACE] /models/chat resolving API key')
 
       const apiKey = await resolveApiKey({
-        isAnonymous: session.isAnonymous,
-        userId:      session.userId,
+        isAnonymous: activeIsAnonymous,
+        userId:      activeUserId,
         provider:    provider as ModelProvider,
-        headerKey:   req.anonymousApiKey,
+        headerKey:   req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7).trim() : null,
       })
 
       req.log.debug({
@@ -297,7 +306,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
         const loop = runAgentLoop({
           adapter, executor, model, apiKey,
           messages: messages as NormalizedMessage[],
-          systemPrompt, maxTokens, maxTurns,
+          systemPrompt, maxTokens, maxTurns, baseUrl,
           onConfirm: (callId) => {
             return new Promise((resolve) => {
               // Store resolver in global map, to be called by POST /agent/confirm

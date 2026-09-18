@@ -134,7 +134,7 @@ export function ChatInterface() {
   }
 
   const loadConversation = async (id: string, path: string) => {
-    if (streaming) return
+    if (streaming) stopStreaming()
     try {
       const res = await fetch(`${LOCAL_API_BASE}/history/conversations/${id}`)
       if (!res.ok) {
@@ -164,16 +164,21 @@ export function ChatInterface() {
     }
   }
 
-  const handleNewChat = async () => {
-    if (streaming) return
+  const handleNewChat = async (targetPath?: string) => {
+    if (streaming) stopStreaming()
     
+    const wsPath = targetPath || workspacePath.trim() || 'default'
+    if (targetPath) {
+      setWorkspacePath(targetPath)
+    }
+
     // Create conversation on backend immediately
     try {
       console.log(`[FRONTEND] Creating new conversation manually...`)
       const res = await fetch(`${LOCAL_API_BASE}/history/conversations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspacePath: workspacePath.trim() || 'default' })
+        body: JSON.stringify({ workspacePath: wsPath })
       })
       if (!res.ok) throw new Error('Failed to create new conversation')
       const data = await res.json()
@@ -193,10 +198,19 @@ export function ChatInterface() {
     }
   }
 
+  const handleNewProject = async () => {
+    if (typeof window !== 'undefined' && (window as any).electronAPI) {
+      const folder = await (window as any).electronAPI.pickProjectFolder()
+      if (folder) {
+        handleNewChat(folder)
+      }
+    }
+  }
+
   const sendMessage = useCallback(async (content: string) => {
     if (streaming || !content.trim()) return
 
-    const apiKey = getStoredKey(provider as 'anthropic' | 'openai' | 'google')
+    const apiKey = getStoredKey(provider as 'anthropic' | 'openai' | 'google' | 'custom')
     if (!apiKey && user?.isAnonymous) { setNoKeyWarning(true); return }
     setNoKeyWarning(false)
 
@@ -224,12 +238,24 @@ export function ChatInterface() {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
 
+      // get baseUrl if custom model
+      let baseUrl: string | undefined = undefined;
+      try {
+        const stored = localStorage.getItem('customModels');
+        if (stored) {
+          const customModels = JSON.parse(stored);
+          const customModel = customModels.find((m: any) => m.id === model && m.provider === provider);
+          if (customModel && customModel.baseUrl) baseUrl = customModel.baseUrl;
+        }
+      } catch (e) {}
+
       const res = await fetch(`${LOCAL_API_BASE}/models/chat`, {
         method: 'POST', headers, credentials: 'include',
         body: JSON.stringify({ 
           provider, model, 
           messages: history,
-          workspacePath: workspacePath.trim() || undefined
+          workspacePath: workspacePath.trim() || undefined,
+          baseUrl
         }),
         signal: ctrl.signal,
       })
@@ -350,6 +376,23 @@ export function ChatInterface() {
         currentConversationId={conversationId}
         onSelectConversation={loadConversation}
         onNewChat={handleNewChat}
+        onNewProject={handleNewProject}
+        onNewChatInWorkspace={(path) => handleNewChat(path)}
+        onDeleteWorkspace={(path) => {
+          if (workspacePath === path) {
+             stopStreaming()
+             setWorkspacePath('')
+             setConversationId(null)
+             setMessages([])
+          }
+        }}
+        onClearChat={() => {
+          stopStreaming()
+          setConversationId(null)
+          localStorage.removeItem('lastConversationId')
+          setMessages([])
+          prevMessagesLength.current = 0
+        }}
       />
       
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>

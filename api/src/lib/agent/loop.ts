@@ -44,7 +44,7 @@ export async function* runAgentLoop(params: AgentRunParams): AsyncGenerator<Agen
     }
 
     // ── Model turn ──────────────────────────────────────────────
-    for await (const chunk of adapter.chat({ apiKey, model, messages, tools, systemPrompt, maxTokens })) {
+    for await (const chunk of adapter.chat({ apiKey, model, messages, tools, systemPrompt, maxTokens, baseUrl: params.baseUrl })) {
       switch (chunk.type) {
         case 'token':
           turnText += chunk.content

@@ -50,7 +50,9 @@ export function ChatInput({ onSend, onStop, streaming }: ChatInputProps) {
         border: '1px solid rgba(255,255,255,0.1)',
         borderRadius: '16px', padding: '0.6rem 0.75rem',
         transition: 'border-color 0.2s',
+        cursor: 'text'
       }}
+        onClick={() => textareaRef.current?.focus()}
         onFocusCapture={e => (e.currentTarget.style.borderColor = 'rgba(99,102,241,0.4)')}
         onBlurCapture={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')}
       >

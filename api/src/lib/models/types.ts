@@ -55,6 +55,7 @@ export interface ModelAdapterParams {
   tools?:    ToolDefinition[]
   maxTokens?: number
   systemPrompt?: string
+  baseUrl?: string
 }
 
 export interface ModelAdapter {
@@ -84,4 +85,4 @@ export const MODEL_CATALOGUE = [
   { provider: 'google',    id: 'gemini-2.5-pro',            label: 'Gemini 2.5 Pro',        tier: 'premium' },
 ] as const
 
-export type ModelProvider = 'anthropic' | 'openai' | 'google'
+export type ModelProvider = 'anthropic' | 'openai' | 'google' | 'custom'

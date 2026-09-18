@@ -117,7 +117,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: 'OAuth Not Configured' })
     }
 
-    const publicUrl = process.env.PUBLIC_URL || 'http://127.0.0.1:8081'
+    const host = req.headers['x-forwarded-host'] || req.headers.host
+    const proto = req.headers['x-forwarded-proto'] || req.protocol
+    const publicUrl = process.env.PUBLIC_URL || (host ? `${proto}://${host}` : 'http://127.0.0.1:8081')
 
     const redirectUri = `${publicUrl}/auth/github/callback`
     const githubUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=read:user user:email&state=${state}`

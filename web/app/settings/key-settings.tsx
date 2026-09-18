@@ -5,22 +5,25 @@ import { Key, Eye, EyeOff, Trash2, CheckCircle, AlertCircle, Shield, ShieldOff, 
 import { useSession } from '@/lib/session-context'
 import { REMOTE_API_BASE, loginWithGithub } from '@/lib/config'
 
-type Provider = 'anthropic' | 'openai' | 'google'
+type Provider = 'anthropic' | 'openai' | 'google' | 'custom'
 
 const PROVIDERS: { id: Provider; name: string; placeholder: string; color: string; docsUrl: string }[] = [
   { id: 'anthropic', name: 'Anthropic',  placeholder: 'sk-ant-api03-…', color: '#d97706', docsUrl: 'https://console.anthropic.com/settings/keys' },
   { id: 'openai',    name: 'OpenAI',     placeholder: 'sk-proj-…',      color: '#10b981', docsUrl: 'https://platform.openai.com/api-keys' },
   { id: 'google',    name: 'Google AI',  placeholder: 'AIza…',           color: '#3b82f6', docsUrl: 'https://aistudio.google.com/app/apikey' },
+  { id: 'custom',    name: 'Custom Models', placeholder: 'Any key or leave blank…', color: '#8b5cf6', docsUrl: '#' },
 ]
 
 const STORAGE_KEY = 'agenthub:api_keys'
 
 function loadKeys(): Record<Provider, string> {
+  const defaults: Record<Provider, string> = { anthropic: '', openai: '', google: '', custom: '' }
   try {
     const raw = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
-    if (!raw) return { anthropic: '', openai: '', google: '' }
-    return JSON.parse(raw)
-  } catch { return { anthropic: '', openai: '', google: '' } }
+    if (!raw) return defaults
+    const parsed = JSON.parse(raw)
+    return { ...defaults, ...parsed }
+  } catch { return defaults }
 }
 
 function saveKeys(keys: Record<Provider, string>) {
@@ -39,9 +42,9 @@ export function getStoredKey(provider: Provider): string | null {
 
 export function KeySettings() {
   const { user, loading: sessionLoading } = useSession()
-  const [keys, setKeys]     = useState<Record<Provider, string>>({ anthropic: '', openai: '', google: '' })
-  const [visible, setVisible] = useState<Record<Provider, boolean>>({ anthropic: false, openai: false, google: false })
-  const [saved, setSaved]   = useState<Record<Provider, boolean>>({ anthropic: false, openai: false, google: false })
+  const [keys, setKeys]     = useState<Record<Provider, string>>({ anthropic: '', openai: '', google: '', custom: '' })
+  const [visible, setVisible] = useState<Record<Provider, boolean>>({ anthropic: false, openai: false, google: false, custom: false })
+  const [saved, setSaved]   = useState<Record<Provider, boolean>>({ anthropic: false, openai: false, google: false, custom: false })
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {

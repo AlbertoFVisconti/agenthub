@@ -6,7 +6,7 @@ import AdmZip from 'adm-zip'
 import { eq, and, sql } from 'drizzle-orm'
 import { getDb } from '../db/index.js'
 import { tools, toolVersions, installs } from '../db/schema.js'
-import { McpManifestSchema, runMcpDryRun, checkDockerAvailable } from '@agenthub/tool-utils'
+import { McpManifestSchema, runMcpDryRun, checkDockerAvailable } from '@agenthub-tools/tool-utils'
 import '@fastify/multipart'
 
 const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
@@ -52,7 +52,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       if (!parsedManifest.success) {
         return reply.status(400).send({ 
           error: 'INVALID_MANIFEST', 
-          message: parsedManifest.error.issues.map(i => i.message).join(', ') 
+          message: parsedManifest.error.issues.map((i: any) => i.message).join(', ') 
         })
       }
       const manifest = parsedManifest.data
@@ -348,7 +348,8 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!tool.packageUrl) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Tool package not found' })
       const filename = tool.packageUrl.split('/').pop()
-      const zipPath = path.join(process.cwd(), 'uploads', 'tools', filename!)
+      if (!filename) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Invalid tool package URL' })
+      const zipPath = path.join(process.cwd(), 'uploads', 'tools', filename)
       
       if (!fs.existsSync(zipPath)) {
         return reply.status(404).send({ error: 'NOT_FOUND', message: 'Zip file not found on disk' })
@@ -382,7 +383,8 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!tool.packageUrl) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Tool package not found' })
       const filename = tool.packageUrl.split('/').pop()
-      const zipPath = path.join(process.cwd(), 'uploads', 'tools', filename!)
+      if (!filename) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Invalid tool package URL' })
+      const zipPath = path.join(process.cwd(), 'uploads', 'tools', filename)
       
       if (!fs.existsSync(zipPath)) {
         return reply.status(404).send({ error: 'NOT_FOUND', message: 'Zip file not found on disk' })

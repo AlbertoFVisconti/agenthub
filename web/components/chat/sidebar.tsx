@@ -1,10 +1,11 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { LOCAL_API_BASE } from '@/lib/config'
 import { Plus, MessageSquare, Folder, ChevronRight, ChevronDown, MoreVertical, Edit2, Trash2 } from 'lucide-react'
 
 type Project = {
   id: string
   workspacePath: string
+  title?: string
   conversations: Conversation[]
 }
 
@@ -18,13 +19,24 @@ export function Sidebar({
   currentConversationId,
   onSelectConversation,
   onNewChat,
+  onNewProject,
+  onNewChatInWorkspace,
+  onDeleteWorkspace,
+  onClearChat,
 }: {
   currentConversationId: string | null
   onSelectConversation: (id: string, workspacePath: string) => void
   onNewChat: () => void
+  onNewProject?: () => void
+  onNewChatInWorkspace?: (workspacePath: string) => void
+  onDeleteWorkspace?: (workspacePath: string) => void
+  onClearChat?: () => void
 }) {
   const [projects, setProjects] = useState<Project[]>([])
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
+  const [editingProjectTitle, setEditingProjectTitle] = useState('')
+  const [confirmDialog, setConfirmDialog] = useState<{ isOpen: boolean, message: string, onConfirm: () => void } | null>(null)
 
   const fetchHistory = async () => {
     try {
@@ -71,21 +83,64 @@ export function Sidebar({
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this chat?')) return
-    
-    // Optimistic update
-    setProjects(projects.map(p => ({
-      ...p,
-      conversations: p.conversations.filter(c => c.id !== id)
-    })))
-    
-    if (currentConversationId === id) {
-      onNewChat()
+    setConfirmDialog({
+      isOpen: true,
+      message: 'Are you sure you want to delete this chat?',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        // Optimistic update
+        setProjects(projects.map(p => ({
+          ...p,
+          conversations: p.conversations.filter(c => c.id !== id)
+        })))
+        
+        if (currentConversationId === id) {
+          if (onClearChat) onClearChat()
+        }
+
+        await fetch(`${LOCAL_API_BASE}/history/conversations/${id}`, {
+          method: 'DELETE'
+        })
+        fetchHistory()
+      }
+    })
+  }
+
+  const handleDeleteWorkspace = async (workspacePath: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setConfirmDialog({
+      isOpen: true,
+      message: 'Are you sure you want to delete this workspace and all its chats?',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await fetch(`${LOCAL_API_BASE}/history/workspace`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspacePath })
+        })
+        
+        // Clear current chat if it belongs to this workspace
+        const project = projects.find(p => p.workspacePath === workspacePath)
+        if (project && currentConversationId && project.conversations.some(c => c.id === currentConversationId)) {
+          if (onDeleteWorkspace) onDeleteWorkspace(workspacePath)
+        }
+        fetchHistory()
+      }
+    })
+  }
+
+  const handleRenameWorkspace = async (project: Project, newTitle: string) => {
+    if (!newTitle || newTitle.trim() === (project.title || formatPath(project.workspacePath))) {
+      setEditingProjectId(null)
+      return
     }
 
-    await fetch(`${LOCAL_API_BASE}/history/conversations/${id}`, {
-      method: 'DELETE'
+    await fetch(`${LOCAL_API_BASE}/history/workspace`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspacePath: project.workspacePath, title: newTitle.trim() })
     })
+    setEditingProjectId(null)
     fetchHistory()
   }
 
@@ -96,7 +151,8 @@ export function Sidebar({
   }
 
   return (
-    <div style={{
+    <>
+      <div style={{
       width: '260px',
       height: '100%',
       backgroundColor: 'rgba(10,10,20,0.8)',
@@ -106,14 +162,14 @@ export function Sidebar({
     }}>
       <div style={{ padding: '1rem' }}>
         <button
-          onClick={onNewChat}
+          onClick={onNewProject || onNewChat}
           style={{
             width: '100%', padding: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem',
             backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: '6px', color: '#fff', cursor: 'pointer', fontSize: '0.875rem'
           }}
         >
-          <Plus size={16} /> New Chat
+          <Folder size={16} /> New Project
         </button>
       </div>
       
@@ -127,12 +183,88 @@ export function Sidebar({
                 cursor: 'pointer', color: 'hsl(220 15% 65%)', fontSize: '0.75rem', fontWeight: 600,
                 textTransform: 'uppercase', letterSpacing: '0.05em'
               }}
+              onMouseEnter={(e) => {
+                const btn = e.currentTarget.querySelector('.workspace-actions') as HTMLElement
+                if (btn) btn.style.opacity = '1'
+              }}
+              onMouseLeave={(e) => {
+                const btn = e.currentTarget.querySelector('.workspace-actions') as HTMLElement
+                if (btn) btn.style.opacity = '0'
+              }}
             >
               {expandedProjects.has(p.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               <Folder size={14} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {formatPath(p.workspacePath)}
-              </span>
+              {editingProjectId === p.id ? (
+                <input
+                  autoFocus
+                  value={editingProjectTitle}
+                  onChange={(e) => setEditingProjectTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleRenameWorkspace(p, editingProjectTitle)
+                    } else if (e.key === 'Escape') {
+                      setEditingProjectId(null)
+                    }
+                  }}
+                  onBlur={() => handleRenameWorkspace(p, editingProjectTitle)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    flex: 1, background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid #818cf8',
+                    borderRadius: '4px', padding: '0.1rem 0.3rem', fontSize: '0.75rem', outline: 'none'
+                  }}
+                />
+              ) : (
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {p.title || formatPath(p.workspacePath)}
+                </span>
+              )}
+              <div
+                className="workspace-actions"
+                style={{
+                  display: 'flex', alignItems: 'center', opacity: 0, gap: '4px',
+                  transition: 'opacity 0.2s'
+                }}
+              >
+                {onNewChatInWorkspace && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onNewChatInWorkspace(p.workspacePath)
+                    }}
+                    style={{
+                      background: 'none', border: 'none', color: 'hsl(220 15% 65%)',
+                      cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center',
+                    }}
+                    title="New chat in this project"
+                  >
+                    <Plus size={13} />
+                  </button>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setEditingProjectTitle(p.title || formatPath(p.workspacePath))
+                    setEditingProjectId(p.id)
+                  }}
+                  style={{
+                    background: 'none', border: 'none', color: 'hsl(220 15% 65%)',
+                    cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center',
+                  }}
+                  title="Rename project"
+                >
+                  <Edit2 size={13} />
+                </button>
+                <button
+                  onClick={(e) => handleDeleteWorkspace(p.workspacePath, e)}
+                  style={{
+                    background: 'none', border: 'none', color: '#ef4444',
+                    cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center',
+                  }}
+                  title="Delete workspace and all chats"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
             </div>
             
             {expandedProjects.has(p.id) && (
@@ -157,7 +289,42 @@ export function Sidebar({
           </div>
         )}
       </div>
-    </div>
+      </div>
+      
+      {/* Custom Confirm Dialog */}
+      {confirmDialog && confirmDialog.isOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            background: '#1e1e2d', padding: '1.5rem', borderRadius: '8px',
+            border: '1px solid rgba(255,255,255,0.1)', minWidth: '300px'
+          }}>
+            <p style={{ color: '#e2e8f0', marginBottom: '1.5rem', fontSize: '0.95rem' }}>{confirmDialog.message}</p>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setConfirmDialog(null)}
+                style={{
+                  background: 'none', border: '1px solid rgba(255,255,255,0.1)', 
+                  color: '#e2e8f0', padding: '0.4rem 1rem', borderRadius: '4px', cursor: 'pointer'
+                }}>
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDialog.onConfirm}
+                style={{
+                  background: '#ef4444', border: 'none', 
+                  color: '#fff', padding: '0.4rem 1rem', borderRadius: '4px', cursor: 'pointer'
+                }}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

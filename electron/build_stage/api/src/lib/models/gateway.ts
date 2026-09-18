@@ -11,6 +11,7 @@ const adapters: Record<string, ModelAdapter> = {
   anthropic: new AnthropicAdapter(),
   openai:    new OpenAIAdapter(),
   google:    new GoogleAdapter(),
+  custom:    new OpenAIAdapter(),
 }
 
 /**

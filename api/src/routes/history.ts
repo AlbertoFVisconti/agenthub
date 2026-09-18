@@ -255,4 +255,58 @@ export const historyRoutes: FastifyPluginAsync = async (app) => {
 
     return reply.send({ success: true })
   })
+
+  // DELETE /history/workspace
+  app.delete('/workspace', async (req, reply) => {
+    const parsed = z.object({ workspacePath: z.string().min(1) }).safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'INVALID_BODY' })
+    }
+
+    const { workspacePath } = parsed.data
+    const index = readIndex()
+    
+    const projIdx = index.projects.findIndex(p => p.workspacePath === workspacePath)
+    if (projIdx === -1) {
+      return reply.status(404).send({ error: 'NOT_FOUND' })
+    }
+
+    const project = index.projects[projIdx]
+    
+    // Clean up all message files
+    for (const conv of project.conversations) {
+      const msgFile = path.join(MESSAGES_DIR, `${conv.id}.json`)
+      if (fs.existsSync(msgFile)) {
+        fs.unlinkSync(msgFile)
+      }
+    }
+
+    // Remove project
+    index.projects.splice(projIdx, 1)
+    writeIndex(index)
+
+    return reply.send({ success: true })
+  })
+
+  // PATCH /history/workspace
+  app.patch('/workspace', async (req, reply) => {
+    const parsed = z.object({ workspacePath: z.string().min(1), title: z.string().min(1) }).safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'INVALID_BODY' })
+    }
+
+    const { workspacePath, title } = parsed.data
+    const index = readIndex()
+    
+    const project = index.projects.find(p => p.workspacePath === workspacePath)
+    if (!project) {
+      return reply.status(404).send({ error: 'NOT_FOUND' })
+    }
+
+    ;(project as any).title = title
+    project.updatedAt = new Date().toISOString()
+    writeIndex(index)
+
+    return reply.send({ success: true, project })
+  })
 }

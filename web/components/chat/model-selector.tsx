@@ -15,6 +15,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   anthropic: 'Anthropic',
   openai:    'OpenAI',
   google:    'Google',
+  custom:    'Custom',
 }
 
 interface ModelSelectorProps {
@@ -27,7 +28,7 @@ interface ModelSelectorProps {
 export function ModelSelector({ provider, model, onChange, disabled }: ModelSelectorProps) {
   const { models } = useModelCatalogue()
   const [open, setOpen] = useState(false)
-  const [customModel, setCustomModel] = useState('')
+
   const selected = models.find(m => m.id === model)
 
   const grouped = models.reduce<Record<string, typeof models[number][]>>((acc, m) => {
@@ -110,40 +111,6 @@ export function ModelSelector({ provider, model, onChange, disabled }: ModelSele
                     </span>
                   </button>
                 ))}
-                
-                {prov === 'openai' && (
-                  <div style={{ padding: '0.2rem 0', marginTop: '0.2rem' }}>
-                    <input 
-                      type="text"
-                      placeholder="Type custom model & press Enter..."
-                      value={customModel}
-                      onChange={e => setCustomModel(e.target.value)}
-                      onClick={e => e.stopPropagation()}
-                      onKeyDown={e => {
-                        e.stopPropagation()
-                        if (e.key === 'Enter' && customModel.trim()) {
-                          onChange('openai', customModel.trim())
-                          setOpen(false)
-                          setCustomModel('')
-                        }
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '0.45rem 0.6rem',
-                        borderRadius: '6px',
-                        background: 'rgba(0,0,0,0.2)',
-                        border: '1px dashed rgba(255,255,255,0.15)',
-                        color: '#fff',
-                        fontSize: '0.78rem',
-                        fontFamily: 'var(--font-sans)',
-                        outline: 'none',
-                        transition: 'border-color 0.15s'
-                      }}
-                      onFocus={e => (e.target.style.borderColor = 'rgba(99,102,241,0.5)')}
-                      onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.15)')}
-                    />
-                  </div>
-                )}
                 
                 <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '0.35rem 0' }} />
               </div>
