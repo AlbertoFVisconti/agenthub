@@ -1,5 +1,7 @@
+'use client'
+
 import Link from 'next/link'
-import { ArrowLeft, Tool, Server } from 'lucide-react'
+import { ArrowLeft, PenTool, Server } from 'lucide-react'
 
 export default function DocsIndex() {
   return (
@@ -22,7 +24,7 @@ export default function DocsIndex() {
             onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
           >
             <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(99,102,241,0.1)', color: '#818cf8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Tool size={24} />
+              <PenTool size={24} />
             </div>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#fff', margin: 0 }}>Create a Tool</h2>
             <p style={{ color: 'hsl(220 15% 70%)', margin: 0 }}>Learn how to scaffold, write, test, and publish a tool to the AgentHub Marketplace.</p>
