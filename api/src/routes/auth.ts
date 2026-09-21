@@ -167,7 +167,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      const publicUrl = process.env.PUBLIC_URL || 'http://127.0.0.1:8081'
+      const host = req.headers['x-forwarded-host'] || req.headers.host
+      const proto = req.headers['x-forwarded-proto'] || req.protocol
+      const publicUrl = process.env.PUBLIC_URL || (host ? `${proto}://${host}` : 'http://127.0.0.1:8081')
 
       // 1. Exchange code for access token
       const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
@@ -187,7 +189,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       const accessToken = tokenData.access_token
 
       if (!accessToken) {
-        throw new Error('Failed to obtain access token')
+        console.error('GitHub Token Exchange Failed. Raw response:', JSON.stringify(tokenData, null, 2))
+        throw new Error(`Failed to obtain access token: ${tokenData.error_description || tokenData.error || 'Unknown error'}`)
       }
 
       // 2. Fetch user profile
@@ -251,6 +254,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       const payload = { userId, isAnonymous: false }
       const newToken = await signSession(payload);
       
+      console.log(`[API AUTH] Token generated for user ${userId}. Token length: ${newToken.length}`);
+      
       (reply as any).setCookie(SESSION_COOKIE, newToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -258,15 +263,18 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         path: '/',
         maxAge: 60 * 60 * 24 * 90, // 90 days
       })
+      console.log(`[API AUTH] Cookie ${SESSION_COOKIE} set in API response.`)
 
       // Redirect to dashboard or desktop callback
       if (desktopCallback) {
         const cbUrl = new URL(desktopCallback)
         cbUrl.searchParams.set('token', newToken)
         if (desktopState) cbUrl.searchParams.set('state', desktopState)
+        console.log(`[API AUTH] Desktop callback detected. Redirecting to loopback server: ${cbUrl.toString()}`)
         return reply.redirect(cbUrl.toString())
       }
 
+      console.log(`[API AUTH] No desktop callback. Redirecting to /dashboard.`)
       return reply.redirect('/dashboard')
     } catch (err) {
       req.log.error(err)

@@ -166,12 +166,14 @@ async function buildServer() {
         return (reply as any).sendFile('index.html')
       } else {
         reply.status(404).send({ error: 'NOT_FOUND', message: 'Route not found', statusCode: 404 })
+        return reply
       }
     })
   } else {
     // Global 404 if no static files
     fastify.setNotFoundHandler((_req, reply) => {
       reply.status(404).send({ error: 'NOT_FOUND', message: 'Route not found', statusCode: 404 })
+      return reply
     })
   }
 

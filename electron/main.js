@@ -244,13 +244,18 @@ ipcMain.handle('auth:login', async () => {
             value: token,
             httpOnly: true,
             secure: remoteApiBase.startsWith('https'),
-            sameSite: 'no_restriction',
+            sameSite: remoteApiBase.startsWith('https') ? 'no_restriction' : 'lax',
             path: '/'
           }
+          console.log('[ELECTRON AUTH] Received token on loopback. Attempting to set cookie:', { ...cookie, value: '<HIDDEN_TOKEN>' })
           
           await session.defaultSession.cookies.set(cookie)
-          console.log('[AUTH] Cookie set with name:', cookie.name, 'value length:', token.length)
-          console.log('[AUTH] Reloading window...')
+          console.log('[ELECTRON AUTH] Successfully called cookies.set()')
+          
+          const verifyCookies = await session.defaultSession.cookies.get({ url: remoteApiBase })
+          console.log(`[ELECTRON AUTH] Reading back cookies for ${remoteApiBase}:`, verifyCookies.map(c => c.name))
+          
+          console.log('[ELECTRON AUTH] Reloading window...')
           if (mainWindow) mainWindow.reload()
           resolve()
         } catch (err) {
