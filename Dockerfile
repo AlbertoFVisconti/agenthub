@@ -26,6 +26,7 @@ RUN pnpm --filter @agenthub-tools/api deploy --prod --legacy /prod/api
 FROM node:20-slim AS final
 WORKDIR /app
 
+
 # Copy the pruned application from the build stage
 COPY --from=build /prod/api .
 

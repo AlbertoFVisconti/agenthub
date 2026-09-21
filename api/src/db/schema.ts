@@ -116,6 +116,7 @@ export const tools = pgTable(
     status: toolStatusEnum('status').notNull().default('draft'),
     // Denormalized for fast listing queries
     installCount: integer('install_count').notNull().default(0),
+    verified: boolean('verified').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -12,7 +12,7 @@ import { ProjectWorkspace } from '../lib/project/workspace.js'
 import type { AgentEvent } from '../lib/agent/types.js'
 import { pendingConfirmations } from './agent.js'
 import { getDb } from '../db/index.js'
-import { eq } from 'drizzle-orm'
+import { eq, and, or } from 'drizzle-orm'
 import { installs, tools, toolEvents } from '../db/schema.js'
 
 const ChatBodySchema = z.object({
@@ -119,7 +119,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
           let userInstalls: { toolId: string, packageUrl: string | null, manifestJson: unknown }[] = []
 
           if (process.env.DEPLOYMENT_MODE === 'desktop') {
-            const CLOUD_API_URL = process.env.API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
+            const CLOUD_API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
             try {
               const res = await fetch(`${CLOUD_API_URL}/marketplace/installs`, {
                 headers: {
@@ -148,7 +148,13 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
             })
             .from(installs)
             .innerJoin(tools, eq(installs.toolId, tools.id))
-            .where(eq(installs.userId, req.session.userId))
+            .where(and(
+              eq(installs.userId, req.session.userId),
+              or(
+                eq(tools.verified, true),
+                eq(tools.ownerId, req.session.userId)
+              )
+            ))
           }
 
           req.log.debug({ userInstallsLength: userInstalls.length }, '[TRACE] Loaded user installs')
@@ -177,7 +183,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
             if (process.env.DEPLOYMENT_MODE === 'desktop') {
               try {
                 if (!fsSync.existsSync(toolDir)) {
-                  const CLOUD_API_URL = process.env.API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
+                  const CLOUD_API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
                   const dlRes = await fetch(`${CLOUD_API_URL}${inst.packageUrl}`)
                   if (!dlRes.ok) {
                     req.log.error({ status: dlRes.status, url: inst.packageUrl }, 'Failed to download tool zip')
@@ -203,6 +209,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
               image: manifest.name,
               toolDir: process.env.DEPLOYMENT_MODE === 'desktop' ? toolDir : undefined,
               entrypoint: manifest.entrypoint,
+              dockerfile: manifest.dockerfile,
               workspacePath: workspacePath,
               toolId: inst.toolId,
               toolVersion: toolVersion,

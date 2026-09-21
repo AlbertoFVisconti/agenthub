@@ -1,4 +1,4 @@
-﻿import { spawn, execFile } from 'node:child_process'
+import { spawn, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
@@ -24,7 +24,52 @@ export async function checkDockerAvailable(): Promise<{ available: boolean, erro
  * Mounts the code folder, runs the entrypoint, and sends an `initialize` JSON-RPC message.
  * Returns true if the tool responds with a valid JSON-RPC initialization response.
  */
-export async function runMcpDryRun(codeDir: string, entrypoint: string[]): Promise<boolean> {
+import * as path from 'node:path'
+
+export async function runMcpDryRun(codeDir: string, entrypoint: string[], manifest?: any): Promise<boolean> {
+  let imageToRun = 'node:20-alpine'
+
+  if (manifest?.dockerfile) {
+    const imageName = `agenthub-tool-${manifest.name}-${manifest.version || 'dev'}`.toLowerCase().replace(/[^a-z0-9-_]/g, '')
+    const buildArgs = [
+      'build',
+      '-t', imageName,
+      '-f', path.join(codeDir, manifest.dockerfile),
+      codeDir
+    ]
+
+    const buildPassed = await new Promise<boolean>((resolve) => {
+      const buildProc = spawn('docker', buildArgs, { stdio: 'ignore' })
+      const buildTimer = setTimeout(() => {
+        buildProc.kill()
+        resolve(false)
+      }, 10 * 60 * 1000) // 10 minutes max build time
+
+      buildProc.on('close', (code) => {
+        clearTimeout(buildTimer)
+        resolve(code === 0)
+      })
+      buildProc.on('error', () => {
+        clearTimeout(buildTimer)
+        resolve(false)
+      })
+    })
+
+    if (!buildPassed) return false
+
+    try {
+      const { stdout } = await execFileAsync('docker', ['image', 'inspect', imageName, '--format', '{{.Size}}'])
+      const sizeBytes = parseInt(stdout.trim(), 10)
+      if (sizeBytes > 3 * 1024 * 1024 * 1024) { // 3GB limit
+        return false
+      }
+    } catch {
+      return false
+    }
+
+    imageToRun = imageName
+  }
+
   return new Promise((resolve) => {
     const proc = spawn('docker', [
       'run', '-i', '--rm',
@@ -39,7 +84,7 @@ export async function runMcpDryRun(codeDir: string, entrypoint: string[]): Promi
       '--user=1000:1000',
       '-v', `${codeDir}:/app:ro`,
       '-w', '/app',
-      'node:20-alpine',
+      imageToRun,
       ...entrypoint
     ], {
       env: process.env,

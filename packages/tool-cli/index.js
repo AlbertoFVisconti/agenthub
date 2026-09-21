@@ -66,14 +66,16 @@ async function test() {
     process.exit(1)
   }
 
-  const { entryFile, outDir } = await bundleTool(manifest)
-  
-  // Update entrypoint to point to the bundled file for the dry-run
-  const newEntrypoint = [...manifest.entrypoint]
-  newEntrypoint[newEntrypoint.length - 1] = `.agenthub-build/${entryFile}`
+  let newEntrypoint = manifest.entrypoint;
+  if (!manifest.dockerfile) {
+    const { entryFile, outDir } = await bundleTool(manifest)
+    // Update entrypoint to point to the bundled file for the dry-run
+    newEntrypoint = [...manifest.entrypoint]
+    newEntrypoint[newEntrypoint.length - 1] = `.agenthub-build/${entryFile}`
+  }
 
   console.log('Running dry-run test with Docker...')
-  const passed = await runMcpDryRun(process.cwd(), newEntrypoint)
+  const passed = await runMcpDryRun(process.cwd(), newEntrypoint, manifest)
   if (passed) {
     console.log('Dry-run test PASSED! Tool responded correctly to initialization.')
   } else {
@@ -93,7 +95,10 @@ async function packageCmd() {
     process.exit(1)
   }
 
-  const { entryFile, outFile } = await bundleTool(manifest)
+  let entryFile, outFile;
+  if (!manifest.dockerfile) {
+    ({ entryFile, outFile } = await bundleTool(manifest));
+  }
 
   console.log(`Packaging ${manifest.name} v${manifest.version}...`)
   
@@ -133,7 +138,7 @@ async function packageCmd() {
         await walk(fullPath, relPath)
       } else {
         // Skip the original entryFile because we will add the bundled one later
-        if (relPath === entryFile) continue;
+        if (!manifest.dockerfile && relPath === entryFile) continue;
         
         console.log(`  ${relPath}`)
         zip.addLocalFile(fullPath, basePath)
@@ -144,9 +149,11 @@ async function packageCmd() {
   await walk(process.cwd())
 
   // Add the bundled file AS the entryFile in the zip
-  console.log(`  ${entryFile} (bundled)`)
-  const zipDir = path.dirname(entryFile) === '.' ? '' : path.dirname(entryFile)
-  zip.addLocalFile(outFile, zipDir, path.basename(entryFile))
+  if (!manifest.dockerfile) {
+    console.log(`  ${entryFile} (bundled)`)
+    const zipDir = path.dirname(entryFile) === '.' ? '' : path.dirname(entryFile)
+    zip.addLocalFile(outFile, zipDir, path.basename(entryFile))
+  }
 
   zip.writeZip(outPath)
   console.log(`\nSuccessfully packaged tool into ${outName}`)

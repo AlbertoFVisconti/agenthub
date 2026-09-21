@@ -1,5 +1,5 @@
 {
-  "id": "3d417513-ec53-42a6-9cd9-f53b528856f2",
+  "id": "e819b37a-e10f-45e4-97d1-86402034d88f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -663,6 +663,13 @@
           "notNull": true,
           "default": 0
         },
+        "verified": {
+          "name": "verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -884,7 +891,8 @@
         "draft",
         "pending",
         "published",
-        "rejected"
+        "rejected",
+        "removed"
       ]
     }
   },

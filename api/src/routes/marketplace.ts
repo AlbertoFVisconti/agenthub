@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import AdmZip from 'adm-zip'
-import { eq, and, sql } from 'drizzle-orm'
+import { eq, sql, and, or } from 'drizzle-orm'
 import { getDb } from '../db/index.js'
 import { tools, toolVersions, installs } from '../db/schema.js'
 import { McpManifestSchema, runMcpDryRun, checkDockerAvailable } from '@agenthub-tools/tool-utils'
@@ -73,7 +73,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      const passed = await runMcpDryRun(extractDir, manifest.entrypoint)
+      const passed = await runMcpDryRun(extractDir, manifest.entrypoint, manifest)
       if (!passed) {
         return reply.status(400).send({ 
           error: 'DRY_RUN_FAILED', 
@@ -108,7 +108,8 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
           manifestJson: manifest,
           packageUrl: packageUrl,
           updatedAt: new Date(),
-          status: 'published'
+          status: 'published',
+          verified: manifest.dockerfile ? false : true
         }).where(eq(tools.id, toolId))
       } else {
         // Create new tool
@@ -119,7 +120,8 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
           description: manifest.description,
           manifestJson: manifest,
           packageUrl: packageUrl,
-          status: 'published'
+          status: 'published',
+          verified: manifest.dockerfile ? false : true
         }).returning({ id: tools.id })
         toolId = inserted[0].id
       }
@@ -148,12 +150,17 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get('/marketplace/tools', async (req, reply) => {
     try {
+      const db = getDb()
+      
+      const unverifiedCondition =
+        req.session?.isAnonymous === false
+          ? or(eq(tools.verified, true), eq(tools.ownerId, req.session.userId))
+          : eq(tools.verified, true)
 
-
-      const publishedTools = await getDb()
+      const publishedTools = await db
         .select()
         .from(tools)
-        .where(eq(tools.status, 'published'))
+        .where(and(eq(tools.status, 'published'), unverifiedCondition))
 
       return reply.send({ tools: publishedTools })
     } catch (err) {
@@ -181,7 +188,13 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       })
       .from(installs)
       .innerJoin(tools, eq(installs.toolId, tools.id))
-      .where(eq(installs.userId, userId))
+      .where(and(
+        eq(installs.userId, userId),
+        or(
+          eq(tools.verified, true),
+          eq(tools.ownerId, userId)
+        )
+      ))
 
       return reply.send({ installs: userInstalls })
     } catch (err) {
@@ -213,7 +226,9 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const tool = existing[0]
 
-
+      if (!tool.verified && tool.ownerId !== userId) {
+        return reply.status(403).send({ error: 'FORBIDDEN', message: 'This tool is pending review and cannot be installed yet.' })
+      }
 
       // Record the install (ignoring conflict if already installed)
       await db.insert(installs).values({
@@ -341,8 +356,15 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       if (existing.length === 0) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Tool not found' })
       const tool = existing[0]
 
+      let session = req.session
+      const token = (req as any).cookies?.['device_id']
+      if (token && !session) {
+        const { verifySession } = await import('../lib/auth.js')
+        session = await verifySession(token)
+      }
+
       const { canViewSource } = await import('../lib/permissions.js')
-      if (!canViewSource(tool, req.session)) {
+      if (!canViewSource(tool, session)) {
         return reply.status(403).send({ error: 'FORBIDDEN', message: 'Not allowed to view source for this tool' })
       }
 
@@ -361,7 +383,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({ files })
     } catch (err) {
       req.log.error(err)
-      return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Failed to read zip file' })
+      return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Failed to list tool files' })
     }
   })
 
@@ -376,8 +398,15 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       if (existing.length === 0) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Tool not found' })
       const tool = existing[0]
 
+      let session = req.session
+      const token = (req as any).cookies?.['device_id']
+      if (token && !session) {
+        const { verifySession } = await import('../lib/auth.js')
+        session = await verifySession(token)
+      }
+
       const { canViewSource } = await import('../lib/permissions.js')
-      if (!canViewSource(tool, req.session)) {
+      if (!canViewSource(tool, session)) {
         return reply.status(403).send({ error: 'FORBIDDEN', message: 'Not allowed to view source for this tool' })
       }
 

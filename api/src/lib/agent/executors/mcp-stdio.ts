@@ -1,4 +1,4 @@
-﻿import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { createInterface, type Interface } from 'node:readline'
 import * as path from 'node:path'
 import * as os from 'node:os'
@@ -44,6 +44,7 @@ export class StdioMcpExecutor implements ToolExecutor {
     image: string
     toolDir?: string
     entrypoint?: string[]
+    dockerfile?: string
     callTimeoutMs?: number
     toolId?: string
     toolVersion?: string
@@ -127,9 +128,25 @@ export class StdioMcpExecutor implements ToolExecutor {
         dockerArgs.push(`-v`, `${mountPath}:/workspace:ro`)
 
         if (this.opts.toolDir && this.opts.entrypoint) {
+          let runImage = 'node:20-alpine'
+          if (this.opts.dockerfile) {
+            const imageName = `agenthub-tool-${this.image}-${this.opts.toolVersion || 'dev'}`.toLowerCase().replace(/[^a-z0-9-_]/g, '')
+            try {
+              require('node:child_process').execFileSync('docker', ['image', 'inspect', imageName], { stdio: 'ignore' })
+            } catch {
+              require('node:child_process').execFileSync('docker', [
+                'build',
+                '-t', imageName,
+                '-f', path.join(this.opts.toolDir, this.opts.dockerfile),
+                this.opts.toolDir
+              ])
+            }
+            runImage = imageName
+          }
+          
           dockerArgs.push(`-v`, `${this.opts.toolDir}:/app:ro`)
           dockerArgs.push(`-w`, `/app`)
-          dockerArgs.push(`node:20-alpine`)
+          dockerArgs.push(runImage)
           dockerArgs.push(...this.opts.entrypoint)
         } else {
           dockerArgs.push(this.image)
