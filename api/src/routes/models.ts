@@ -59,6 +59,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.post('/models/chat', {
     handler: async (req, reply) => {
+      req.log.info({ cookie: req.headers.cookie }, 'Received POST /models/chat')
       const isDesktop = process.env.DEPLOYMENT_MODE === 'desktop'
       const session = req.session
       
