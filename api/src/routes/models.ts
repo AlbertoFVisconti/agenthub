@@ -182,7 +182,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
             
             if (process.env.DEPLOYMENT_MODE === 'desktop') {
               try {
-                if (!fsSync.existsSync(toolDir)) {
+                if (!fsSync.existsSync(path.join(toolDir, 'manifest.json'))) {
                   const CLOUD_API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
                   const dlRes = await fetch(`${CLOUD_API_URL}${inst.packageUrl}`)
                   if (!dlRes.ok) {
