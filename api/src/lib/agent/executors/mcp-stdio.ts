@@ -111,20 +111,32 @@ export class StdioMcpExecutor implements ToolExecutor {
         const mem = this.opts.memoryLimit || '256m'
         const cpu = this.opts.cpuLimit || '0.5'
 
+        // Custom Dockerfile tools (e.g. Ghidra+JDK) need a writable FS,
+        // larger /tmp, more memory and PIDs than the default node sandbox.
+        const hasCustomDockerfile = !!(this.opts.dockerfile && this.opts.toolDir)
+
         const dockerArgs = [
           'run', '-i', '--rm',
           '--label=agenthub-tool=true',
-          `--memory=${mem}`,
-          `--memory-swap=${mem}`,
-          `--cpus=${cpu}`,
-          '--pids-limit=64',
+          `--memory=${hasCustomDockerfile ? '2g' : mem}`,
+          `--memory-swap=${hasCustomDockerfile ? '2g' : mem}`,
+          `--cpus=${hasCustomDockerfile ? '2.0' : cpu}`,
+          `--pids-limit=${hasCustomDockerfile ? 256 : 64}`,
           '--network=none',
           '--cap-drop=ALL',
           '--security-opt=no-new-privileges',
-          '--read-only',
-          '--tmpfs=/tmp:rw,noexec,nosuid,size=64m',
-          '--user=1000:1000'
         ]
+
+        if (!hasCustomDockerfile) {
+          // Strict sandbox for simple node tools
+          dockerArgs.push('--read-only')
+          dockerArgs.push('--tmpfs=/tmp:rw,noexec,nosuid,size=64m')
+          dockerArgs.push('--user=1000:1000')
+        } else {
+          // Custom Dockerfile tools need a writable FS and executable /tmp
+          dockerArgs.push('--tmpfs=/tmp:rw,nosuid,size=512m')
+        }
+
         dockerArgs.push(`-v`, `${mountPath}:/workspace:ro`)
 
         if (this.opts.toolDir && this.opts.entrypoint) {
