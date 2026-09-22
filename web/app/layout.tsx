@@ -25,6 +25,8 @@ export const metadata: Metadata = {
   },
 }
 
+import { FetchInterceptor } from '@/components/FetchInterceptor'
+
 export default function RootLayout({
   children,
 }: {
@@ -33,6 +35,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="min-h-screen bg-gray-950 text-gray-100 antialiased">
+        <FetchInterceptor />
         <SessionProvider>
           <Navbar />
           <main>{children}</main>
