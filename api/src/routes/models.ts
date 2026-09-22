@@ -176,11 +176,12 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
                 }
               })
               req.log.info('[HARDCODED] Injected ghidra-decompiler tool')
+              console.log('\n\n🔧🔧🔧 HARDCODED GHIDRA TOOL INJECTED 🔧🔧🔧\n\n')
             }
           }
           // ── END HARDCODED TOOLS ────────────────────────────────────
 
-          req.log.debug({ userInstallsLength: userInstalls.length }, '[TRACE] Loaded user installs')
+          req.log.info({ userInstallsLength: userInstalls.length }, '[TRACE] Loaded user installs')
 
           const fs = await import('node:fs/promises')
           const fsSync = await import('node:fs')
@@ -264,7 +265,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
 
       try {
         const allToolsForLog = await executor.listTools()
-        req.log.debug({ toolNames: allToolsForLog.map(t => t.name) }, 'tools sent to model')
+        req.log.info({ toolCount: allToolsForLog.length, toolNames: allToolsForLog.map(t => t.name) }, '[HARDCODED-CHECK] tools sent to model')
       } catch (err) {
         req.log.error({ err }, 'Failed to list/merge tools before starting model')
       }
