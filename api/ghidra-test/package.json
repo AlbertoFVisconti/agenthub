@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@agenthub-tools/tool-cli": "file:../../agenthub/packages/tool-cli"
+  }
+}

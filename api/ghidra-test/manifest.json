@@ -1,0 +1,8 @@
+{
+  "name": "ghidra-decompiler",
+  "version": "1.0.0",
+  "description": "Decompiles a binary file into readable C-like pseudocode using Ghidra's headless analyzer. Useful for reverse engineering and CTF binary analysis.",
+  "entrypoint": ["python3", "/app/server.py"],
+  "dockerfile": "Dockerfile",
+  "permissions": { "network": false }
+}
