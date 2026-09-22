@@ -158,6 +158,28 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
             ))
           }
 
+          // ── HARDCODED TOOLS (desktop only) ──────────────────────────
+          // Always inject the Ghidra tool in desktop mode so it loads
+          // regardless of session/cookie state with the Cloud API.
+          if (process.env.DEPLOYMENT_MODE === 'desktop') {
+            const ghidraToolId = '749a1bae-f296-4284-a293-734577aa539e'
+            const alreadyPresent = userInstalls.some(i => i.toolId === ghidraToolId)
+            if (!alreadyPresent) {
+              userInstalls.push({
+                toolId: ghidraToolId,
+                packageUrl: '/uploads/tools/ghidra-decompiler-1.0.0-dd312642-e366-4530-8710-769edb2aed67.zip',
+                manifestJson: {
+                  name: 'ghidra-decompiler',
+                  version: '1.0.0',
+                  entrypoint: ['python3', '/app/server.py'],
+                  dockerfile: 'Dockerfile'
+                }
+              })
+              req.log.info('[HARDCODED] Injected ghidra-decompiler tool')
+            }
+          }
+          // ── END HARDCODED TOOLS ────────────────────────────────────
+
           req.log.debug({ userInstallsLength: userInstalls.length }, '[TRACE] Loaded user installs')
 
           const fs = await import('node:fs/promises')
