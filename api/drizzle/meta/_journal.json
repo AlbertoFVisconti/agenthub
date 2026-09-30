@@ -22,6 +22,20 @@
       "when": 1788468275397,
       "tag": "0002_even_puck",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790781942035,
+      "tag": "0003_first_mercury",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790781976680,
+      "tag": "0004_certain_forge",
+      "breakpoints": true
     }
   ]
 }

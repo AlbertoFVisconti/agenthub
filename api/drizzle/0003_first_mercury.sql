@@ -1,0 +1,1 @@
+ALTER TYPE "tool_status" ADD VALUE 'removed';

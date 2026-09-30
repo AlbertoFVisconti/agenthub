@@ -1,4 +1,4 @@
-﻿import { spawn, execFile } from 'node:child_process'
+import { spawn, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
@@ -24,24 +24,50 @@ export async function checkDockerAvailable(): Promise<{ available: boolean, erro
  * Mounts the code folder, runs the entrypoint, and sends an `initialize` JSON-RPC message.
  * Returns true if the tool responds with a valid JSON-RPC initialization response.
  */
-export async function runMcpDryRun(codeDir: string, entrypoint: string[]): Promise<boolean> {
-  return new Promise((resolve) => {
-    const proc = spawn('docker', [
+export async function runMcpDryRun(codeDir: string, entrypoint: string[], manifest?: any): Promise<boolean> {
+  return new Promise(async (resolve) => {
+    let imageToRun = 'node:20-alpine'
+    const dockerArgs = [
       'run', '-i', '--rm',
-      '--memory=256m',
-      '--cpus=0.5',
-      '--pids-limit=64',
       '--network=none',
       '--cap-drop=ALL',
       '--security-opt=no-new-privileges',
-      '--read-only',
-      '--tmpfs=/tmp:rw,noexec,nosuid,size=64m',
-      '--user=1000:1000',
-      '-v', `${codeDir}:/app:ro`,
-      '-w', '/app',
-      'node:20-alpine',
-      ...entrypoint
-    ], {
+    ]
+
+    if (manifest?.dockerImageRef) {
+      dockerArgs.push('--memory=2g', '--cpus=2', '--pids-limit=256', '--tmpfs=/tmp:rw,size=512m')
+      imageToRun = manifest.dockerImageRef
+    } else if (manifest?.dockerfile) {
+      dockerArgs.push('--memory=2g', '--cpus=2', '--pids-limit=256', '--tmpfs=/tmp:rw,size=512m')
+      
+      const imageName = `agenthub-dryrun-${manifest.name}-${manifest.version}`
+      try {
+        await execFileAsync('docker', ['build', '-t', imageName, codeDir])
+        imageToRun = imageName
+      } catch (err) {
+        console.error('Dry-run docker build failed', err)
+        resolve(false)
+        return
+      }
+    } else {
+      dockerArgs.push(
+        '--memory=256m',
+        '--cpus=0.5',
+        '--pids-limit=64',
+        '--read-only',
+        '--tmpfs=/tmp:rw,noexec,nosuid,size=64m',
+        '--user=1000:1000',
+        '-v', `${codeDir}:/app:ro`,
+        '-w', '/app'
+      )
+    }
+
+    dockerArgs.push(imageToRun)
+    if (entrypoint && entrypoint.length > 0) {
+      dockerArgs.push(...entrypoint)
+    }
+
+    const proc = spawn('docker', dockerArgs, {
       env: process.env,
       stdio: ['pipe', 'pipe', 'pipe']
     })

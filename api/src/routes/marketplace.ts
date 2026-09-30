@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
+import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -80,12 +81,39 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      const passed = await runMcpDryRun(extractDir, manifest.entrypoint)
+      const passed = await runMcpDryRun(extractDir, manifest.entrypoint, manifest)
       if (!passed) {
         return reply.status(400).send({ 
           error: 'DRY_RUN_FAILED', 
           message: 'Tool failed to initialize and respond to MCP handshake in Docker.' 
         })
+      }
+
+      // If a Dockerfile is present, we built the image during dry-run. Now we push it to GHCR.
+      if (manifest.dockerfile) {
+        const ghcrNamespace = process.env.GHCR_NAMESPACE
+        const ghcrToken = process.env.GHCR_TOKEN
+        if (ghcrNamespace && ghcrToken) {
+          const dryRunImageName = `agenthub-dryrun-${manifest.name}-${manifest.version}`
+          const finalImageRef = `ghcr.io/${ghcrNamespace}/${manifest.name}:${manifest.version}`
+          
+          try {
+            const { execFileSync } = await import('node:child_process')
+            // Login to GHCR (safe since token is passed via stdin)
+            const dockerLogin = spawn('docker', ['login', 'ghcr.io', '-u', ghcrNamespace, '--password-stdin'])
+            dockerLogin.stdin.write(ghcrToken + '\n')
+            dockerLogin.stdin.end()
+            await new Promise((resolve) => dockerLogin.on('close', resolve))
+
+            execFileSync('docker', ['tag', dryRunImageName, finalImageRef])
+            execFileSync('docker', ['push', finalImageRef])
+            manifest.dockerImageRef = finalImageRef
+          } catch (err) {
+            req.log.error(err, 'Failed to push Docker image to GHCR')
+            // We can optionally fail the publish here, or let it proceed with local zip extraction.
+            // Let's continue since desktop can fallback to building from zip if `dockerImageRef` is missing.
+          }
+        }
       }
 
       // 5. Store package to uploads directory (simulating S3)
@@ -117,6 +145,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
             description: manifest.description,
             manifestJson: manifest,
             packageUrl: packageUrl,
+            dockerImageRef: manifest.dockerImageRef,
             updatedAt: new Date(),
             status: 'published'
           }).where(eq(tools.id, toolId))
@@ -129,6 +158,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
             description: manifest.description,
             manifestJson: manifest,
             packageUrl: packageUrl,
+            dockerImageRef: manifest.dockerImageRef,
             status: 'published'
           }).returning({ id: tools.id })
           toolId = inserted[0].id
@@ -140,6 +170,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
           version: manifest.version,
           manifestJson: manifest,
           packageUrl: packageUrl,
+          dockerImageRef: manifest.dockerImageRef,
         })
       })
 

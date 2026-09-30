@@ -113,6 +113,8 @@ export const tools = pgTable(
     manifestJson: jsonb('manifest_json').notNull(),
     // URL to the uploaded package (zip or npm package)
     packageUrl: text('package_url'),
+    // Reference to a pre-built Docker image for this tool (e.g., ghcr.io/agenthub/tool:version)
+    dockerImageRef: text('docker_image_ref'),
     status: toolStatusEnum('status').notNull().default('draft'),
     // Denormalized for fast listing queries
     installCount: integer('install_count').notNull().default(0),
@@ -144,6 +146,7 @@ export const toolVersions = pgTable(
     version: text('version').notNull(),
     manifestJson: jsonb('manifest_json').notNull(),
     packageUrl: text('package_url').notNull(),
+    dockerImageRef: text('docker_image_ref'),
     changelog: text('changelog'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
