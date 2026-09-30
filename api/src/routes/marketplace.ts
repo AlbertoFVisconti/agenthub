@@ -39,6 +39,13 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       // 2. Extract zip
       const zip = new AdmZip(zipPath)
       const extractDir = path.join(tmpDir, 'extracted')
+      const entries = zip.getEntries()
+      for (const entry of entries) {
+        const targetPath = path.resolve(extractDir, entry.entryName)
+        if (!targetPath.startsWith(path.resolve(extractDir) + path.sep) && targetPath !== path.resolve(extractDir)) {
+          return reply.status(400).send({ error: 'MALICIOUS_PACKAGE', message: 'Package contains path traversal entries' })
+        }
+      }
       zip.extractAllTo(extractDir, true)
 
       // 3. Read & Validate manifest
@@ -90,49 +97,57 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
 
       // 6. DB Insertion
       let toolId: string
+      let forbidden = false
       const db = getDb()
 
-      // Check if tool exists
-      const existing = await db.select().from(tools).where(eq(tools.slug, manifest.name)).limit(1)
-      
-      if (existing.length > 0) {
-        const tool = existing[0]
-        if (tool.ownerId !== userId) {
-          return reply.status(403).send({ error: 'FORBIDDEN', message: 'You do not own this tool' })
-        }
-        toolId = tool.id
+      await db.transaction(async (tx) => {
+        // Check if tool exists
+        const existing = await tx.select().from(tools).where(eq(tools.slug, manifest.name)).limit(1)
         
-        // Update tool with latest manifest
-        await db.update(tools).set({
-          description: manifest.description,
-          manifestJson: manifest,
-          packageUrl: packageUrl,
-          updatedAt: new Date(),
-          status: 'published'
-        }).where(eq(tools.id, toolId))
-      } else {
-        // Create new tool
-        const inserted = await db.insert(tools).values({
-          ownerId: userId,
-          name: manifest.name,
-          slug: manifest.name,
-          description: manifest.description,
-          manifestJson: manifest,
-          packageUrl: packageUrl,
-          status: 'published'
-        }).returning({ id: tools.id })
-        toolId = inserted[0].id
-      }
+        if (existing.length > 0) {
+          const tool = existing[0]
+          if (tool.ownerId !== userId) {
+            forbidden = true
+            return
+          }
+          toolId = tool.id
+          
+          // Update tool with latest manifest
+          await tx.update(tools).set({
+            description: manifest.description,
+            manifestJson: manifest,
+            packageUrl: packageUrl,
+            updatedAt: new Date(),
+            status: 'published'
+          }).where(eq(tools.id, toolId))
+        } else {
+          // Create new tool
+          const inserted = await tx.insert(tools).values({
+            ownerId: userId,
+            name: manifest.name,
+            slug: manifest.name,
+            description: manifest.description,
+            manifestJson: manifest,
+            packageUrl: packageUrl,
+            status: 'published'
+          }).returning({ id: tools.id })
+          toolId = inserted[0].id
+        }
 
-      // Insert tool version
-      await db.insert(toolVersions).values({
-        toolId,
-        version: manifest.version,
-        manifestJson: manifest,
-        packageUrl: packageUrl,
+        // Insert tool version
+        await tx.insert(toolVersions).values({
+          toolId,
+          version: manifest.version,
+          manifestJson: manifest,
+          packageUrl: packageUrl,
+        })
       })
 
-      return reply.send({ success: true, toolId, message: 'Tool published successfully' })
+      if (forbidden) {
+        return reply.status(403).send({ error: 'FORBIDDEN', message: 'You do not own this tool' })
+      }
+
+      return reply.send({ success: true, toolId: toolId!, message: 'Tool published successfully' })
     } catch (err) {
       req.log.error(err)
       return reply.status(500).send({ error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : 'Unknown error' })
@@ -146,7 +161,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
    * GET /marketplace/tools
    * List all published tools.
    */
-  fastify.get('/marketplace/tools', async (req, reply) => {
+  fastify.get('/marketplace/tools', { config: { skipSession: true } }, async (req, reply) => {
     try {
 
 
@@ -213,18 +228,19 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const tool = existing[0]
 
+      if (tool.status !== 'published') {
+        return reply.status(400).send({ error: 'BAD_REQUEST', message: 'Tool is not available for installation' })
+      }
+
 
 
       // Record the install (ignoring conflict if already installed)
-      await db.insert(installs).values({
-        toolId,
-        userId
-      }).onConflictDoNothing() // Assuming userToolIdx unique constraint exists
-
-      // Update install count denormalized field
-      await db.update(tools).set({
-        installCount: sql`${tools.installCount} + 1`
-      }).where(eq(tools.id, toolId))
+      await db.transaction(async (tx) => {
+        const inserted = await tx.insert(installs).values({ toolId, userId }).onConflictDoNothing().returning({ id: installs.id })
+        if (inserted.length > 0) {
+          await tx.update(tools).set({ installCount: sql`${tools.installCount} + 1` }).where(eq(tools.id, toolId))
+        }
+      })
 
       return reply.send({ success: true })
     } catch (err) {
@@ -260,7 +276,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Update install count denormalized field
       await db.update(tools).set({
-        installCount: sql`${tools.installCount} - 1`
+        installCount: sql`GREATEST(0, ${tools.installCount} - 1)`
       }).where(eq(tools.id, toolId))
 
       return reply.send({ success: true })

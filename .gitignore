@@ -11,6 +11,7 @@ out/
 .env
 .env.local
 .env.production
+deployment.env
 
 # OS
 .DS_Store

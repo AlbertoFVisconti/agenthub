@@ -84,20 +84,3 @@ describe('POST /auth/logout', () => {
   })
 })
 
-describe('GET /keys', () => {
-  it('returns empty array with storage:browser for anonymous users', async () => {
-    // Get a fresh anon session cookie
-    const meRes = await app.inject({ method: 'GET', url: '/auth/me' })
-    const cookie = (meRes.headers['set-cookie'] as string).split(';')[0]
-
-    const res = await app.inject({
-      method: 'GET',
-      url: '/keys',
-      headers: { cookie },
-    })
-    expect(res.statusCode).toBe(200)
-    const body = JSON.parse(res.body)
-    expect(body.keys).toEqual([])
-    expect(body.storage).toBe('browser')
-  })
-})

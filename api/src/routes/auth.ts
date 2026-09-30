@@ -95,6 +95,15 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     
     // Extract desktop specific params if present
     const desktopCallback = req.query && (req.query as any).desktop_callback
+    if (desktopCallback) {
+      try {
+        const parsed = new URL(desktopCallback)
+        const isValid = parsed.protocol === 'agenthub:' || (parsed.protocol === 'http:' && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost'))
+        if (!isValid) return reply.status(400).send({ error: 'INVALID_CALLBACK', message: 'Invalid desktop callback URL' })
+      } catch {
+        return reply.status(400).send({ error: 'INVALID_CALLBACK', message: 'Invalid desktop callback URL' })
+      }
+    }
     const desktopState = req.query && (req.query as any).state
     
     // Generate state for CSRF protection
@@ -261,6 +270,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Redirect to dashboard or desktop callback
       if (desktopCallback) {
+        try {
+          const parsed = new URL(desktopCallback)
+          const isValid = parsed.protocol === 'agenthub:' || (parsed.protocol === 'http:' && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost'))
+          if (!isValid) return reply.status(400).send({ error: 'INVALID_CALLBACK', message: 'Invalid desktop callback URL' })
+        } catch {
+          return reply.status(400).send({ error: 'INVALID_CALLBACK', message: 'Invalid desktop callback URL' })
+        }
         const cbUrl = new URL(desktopCallback)
         cbUrl.searchParams.set('token', newToken)
         if (desktopState) cbUrl.searchParams.set('state', desktopState)

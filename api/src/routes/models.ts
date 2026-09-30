@@ -189,6 +189,13 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
                   await fs.writeFile(tmpZip, buffer)
                   
                   const zip = new AdmZip(tmpZip)
+                  const entries = zip.getEntries()
+                  for (const entry of entries) {
+                    const targetPath = path.resolve(toolDir, entry.entryName)
+                    if (!targetPath.startsWith(path.resolve(toolDir) + path.sep) && targetPath !== path.resolve(toolDir)) {
+                      throw new Error('MALICIOUS_PACKAGE: Package contains path traversal entries')
+                    }
+                  }
                   zip.extractAllTo(toolDir, true)
                   await fs.rm(tmpZip, { force: true })
                   req.log.debug({ toolId: inst.toolId, version: toolVersion, dir: toolDir }, 'Extracted tool to local cache')
@@ -289,8 +296,11 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
       // Inject CORS headers manually because reply.hijack bypasses fastify-cors's onSend hook
       const reqOrigin = req.headers.origin
       if (reqOrigin) {
-        raw.setHeader('Access-Control-Allow-Origin', reqOrigin)
-        raw.setHeader('Access-Control-Allow-Credentials', 'true')
+        const allowedOrigins = process.env.CORS_ORIGIN ? [...process.env.CORS_ORIGIN.split(','), 'http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:8080', 'http://127.0.0.1:8080'] : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001', 'http://localhost:8080', 'http://127.0.0.1:8080']
+        if (allowedOrigins.includes(reqOrigin) || allowedOrigins.includes('*')) {
+          raw.setHeader('Access-Control-Allow-Origin', reqOrigin)
+          raw.setHeader('Access-Control-Allow-Credentials', 'true')
+        }
       }
 
       raw.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
