@@ -176,7 +176,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
             
             if (process.env.DEPLOYMENT_MODE === 'desktop') {
               try {
-                if (!fsSync.existsSync(toolDir)) {
+                if (!fsSync.existsSync(path.join(toolDir, 'manifest.json'))) {
                   const CLOUD_API_URL = process.env.API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
                   const dlRes = await fetch(`${CLOUD_API_URL}${inst.packageUrl}`)
                   if (!dlRes.ok) {
@@ -206,6 +206,10 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
               }
             }
             
+            // Detect custom Dockerfile in tool directory
+            const hasCustomDockerfile = toolDir ? (await fs.stat(path.join(toolDir, 'Dockerfile')).catch(() => null))?.isFile() ?? false : false
+            const dockerImageRef = (manifest as any).dockerImageRef || (inst as any).dockerImageRef
+
             executorsList.push(new StdioMcpExecutor({ 
               image: manifest.name,
               toolDir: process.env.DEPLOYMENT_MODE === 'desktop' ? toolDir : undefined,
@@ -215,6 +219,8 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
               toolVersion: toolVersion,
               memoryLimit: dockerLimits.memory,
               cpuLimit: dockerLimits.cpu,
+              hasCustomDockerfile,
+              dockerImageRef,
               onEvent: (type, call, err) => {
                 if (process.env.DEPLOYMENT_MODE !== 'desktop') {
                   getDb().insert(toolEvents).values({

@@ -1,4 +1,4 @@
-﻿import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
 import { createInterface, type Interface } from 'node:readline'
 import * as path from 'node:path'
 import * as os from 'node:os'
@@ -50,6 +50,8 @@ export class StdioMcpExecutor implements ToolExecutor {
     memoryLimit?: string
     cpuLimit?: string
     workspacePath?: string
+    hasCustomDockerfile?: boolean
+    dockerImageRef?: string
     onEvent?: (type: 'invoke' | 'error', call: ToolCall, err?: Error) => void
   }) {
     this.image = opts.image
@@ -107,8 +109,8 @@ export class StdioMcpExecutor implements ToolExecutor {
         const mountPath = this.opts.workspacePath || fallbackDir
         console.debug(`[StdioMcpExecutor] Mounting workspace path: ${mountPath} for image ${this.image}`)
         
-        const mem = this.opts.memoryLimit || '256m'
-        const cpu = this.opts.cpuLimit || '0.5'
+        const mem = this.opts.memoryLimit || (this.opts.hasCustomDockerfile ? '2g' : '256m')
+        const cpu = this.opts.cpuLimit || (this.opts.hasCustomDockerfile ? '2' : '0.5')
 
         const dockerArgs = [
           'run', '-i', '--rm',
@@ -116,17 +118,49 @@ export class StdioMcpExecutor implements ToolExecutor {
           `--memory=${mem}`,
           `--memory-swap=${mem}`,
           `--cpus=${cpu}`,
-          '--pids-limit=64',
           '--network=none',
           '--cap-drop=ALL',
           '--security-opt=no-new-privileges',
-          '--read-only',
-          '--tmpfs=/tmp:rw,noexec,nosuid,size=64m',
-          '--user=1000:1000'
         ]
+
+        if (this.opts.hasCustomDockerfile || this.opts.dockerImageRef) {
+          // Custom Dockerfile tools need writable FS (JVM, Python, etc.)
+          dockerArgs.push('--pids-limit=256')
+          dockerArgs.push('--tmpfs=/tmp:rw,size=512m')
+        } else {
+          // Plain node tools get strict sandbox
+          dockerArgs.push('--pids-limit=64')
+          dockerArgs.push('--read-only')
+          dockerArgs.push('--tmpfs=/tmp:rw,noexec,nosuid,size=64m')
+          dockerArgs.push('--user=1000:1000')
+        }
+
         dockerArgs.push(`-v`, `${mountPath}:/workspace:ro`)
 
-        if (this.opts.toolDir && this.opts.entrypoint) {
+        if (this.opts.dockerImageRef) {
+          // Pre-built image from registry (e.g., ghcr.io/agenthub-tools/ghidra:1.0.0)
+          dockerArgs.push(this.opts.dockerImageRef)
+          if (this.opts.entrypoint) {
+            dockerArgs.push(...this.opts.entrypoint)
+          }
+        } else if (this.opts.toolDir && this.opts.hasCustomDockerfile) {
+          // Custom Dockerfile tool — build image if needed, then run
+          const imageName = `agenthub-tool-${this.opts.toolId || 'custom'}-${this.opts.toolVersion || 'latest'}`
+          try {
+            execFileSync('docker', ['image', 'inspect', imageName], { stdio: 'ignore' })
+          } catch {
+            // Image doesn't exist — build it
+            console.debug(`[StdioMcpExecutor] Building Docker image ${imageName} from ${this.opts.toolDir}`)
+            execFileSync('docker', ['build', '-t', imageName, this.opts.toolDir!], {
+              stdio: 'inherit',
+              timeout: 600_000, // 10 min build timeout
+            })
+          }
+          dockerArgs.push(imageName)
+          if (this.opts.entrypoint) {
+            dockerArgs.push(...this.opts.entrypoint)
+          }
+        } else if (this.opts.toolDir && this.opts.entrypoint) {
           dockerArgs.push(`-v`, `${this.opts.toolDir}:/app:ro`)
           dockerArgs.push(`-w`, `/app`)
           dockerArgs.push(`node:20-alpine`)
