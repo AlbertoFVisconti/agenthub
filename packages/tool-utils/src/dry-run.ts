@@ -42,7 +42,10 @@ export async function runMcpDryRun(codeDir: string, entrypoint: string[], manife
       
       const imageName = `agenthub-dryrun-${manifest.name}-${manifest.version}`
       try {
-        await execFileAsync('docker', ['build', '-t', imageName, codeDir])
+        // Build with --network=none to prevent Dockerfiles from making network
+        // calls during build (e.g., exfiltrating data or downloading backdoors).
+        // Tool authors must bundle all dependencies in the build context.
+        await execFileAsync('docker', ['build', '--network=none', '-t', imageName, codeDir], { timeout: 600_000 })
         imageToRun = imageName
       } catch (err) {
         console.error('Dry-run docker build failed', err)

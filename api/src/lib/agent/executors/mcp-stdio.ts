@@ -156,9 +156,9 @@ export class StdioMcpExecutor implements ToolExecutor {
           try {
             execFileSync('docker', ['image', 'inspect', imageName], { stdio: 'ignore' })
           } catch {
-            // Image doesn't exist — build it
+            // Image doesn't exist — build it (with --network=none for security)
             console.debug(`[StdioMcpExecutor] Building Docker image ${imageName} from ${this.opts.toolDir}`)
-            execFileSync('docker', ['build', '-t', imageName, this.opts.toolDir!], {
+            execFileSync('docker', ['build', '--network=none', '-t', imageName, this.opts.toolDir!], {
               stdio: 'inherit',
               timeout: 600_000, // 10 min build timeout
             })
