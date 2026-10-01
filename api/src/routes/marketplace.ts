@@ -223,7 +223,8 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       const userInstalls = await db.select({
         toolId: installs.toolId,
         packageUrl: tools.packageUrl,
-        manifestJson: tools.manifestJson
+        manifestJson: tools.manifestJson,
+        dockerImageRef: tools.dockerImageRef
       })
       .from(installs)
       .innerJoin(tools, eq(installs.toolId, tools.id))

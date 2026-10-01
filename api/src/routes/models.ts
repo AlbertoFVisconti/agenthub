@@ -116,7 +116,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
       // Load user's installed marketplace tools
       if (req.session?.userId || process.env.DEPLOYMENT_MODE === 'desktop') {
         try {
-          let userInstalls: { toolId: string, packageUrl: string | null, manifestJson: unknown }[] = []
+          let userInstalls: { toolId: string, packageUrl: string | null, manifestJson: unknown, dockerImageRef: string | null }[] = []
 
           if (process.env.DEPLOYMENT_MODE === 'desktop') {
             const CLOUD_API_URL = process.env.API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
@@ -144,7 +144,8 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
             userInstalls = await db.select({
               toolId: installs.toolId,
               packageUrl: tools.packageUrl,
-              manifestJson: tools.manifestJson
+              manifestJson: tools.manifestJson,
+              dockerImageRef: tools.dockerImageRef
             })
             .from(installs)
             .innerJoin(tools, eq(installs.toolId, tools.id))

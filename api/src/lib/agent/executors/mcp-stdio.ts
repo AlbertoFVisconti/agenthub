@@ -139,6 +139,13 @@ export class StdioMcpExecutor implements ToolExecutor {
 
         if (this.opts.dockerImageRef) {
           // Pre-built image from registry (e.g., ghcr.io/agenthub-tools/ghidra:1.0.0)
+          // Pull the image if not cached locally
+          try {
+            execFileSync('docker', ['image', 'inspect', this.opts.dockerImageRef], { stdio: 'ignore' })
+          } catch {
+            console.debug(`[StdioMcpExecutor] Pulling pre-built image: ${this.opts.dockerImageRef}`)
+            execFileSync('docker', ['pull', this.opts.dockerImageRef], { stdio: 'inherit', timeout: 600_000 })
+          }
           dockerArgs.push(this.opts.dockerImageRef)
           if (this.opts.entrypoint) {
             dockerArgs.push(...this.opts.entrypoint)
