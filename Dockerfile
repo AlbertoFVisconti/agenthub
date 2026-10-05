@@ -26,8 +26,7 @@ RUN pnpm --filter @agenthub-tools/api deploy --prod --legacy /prod/api
 FROM node:20-slim AS final
 WORKDIR /app
 
-# Install Docker CLI so the API can build and push tools
-RUN apt-get update && apt-get install -y docker.io && rm -rf /var/lib/apt/lists/*
+
 
 # Copy the pruned application from the build stage
 COPY --from=build /prod/api .

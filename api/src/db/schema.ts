@@ -25,6 +25,7 @@ export const modelProviderEnum = pgEnum('model_provider', [
 export const toolStatusEnum = pgEnum('tool_status', [
   'draft',
   'pending',
+  'building',
   'published',
   'rejected',
   'removed'
@@ -115,6 +116,7 @@ export const tools = pgTable(
     packageUrl: text('package_url'),
     // Reference to a pre-built Docker image for this tool (e.g., ghcr.io/agenthub/tool:version)
     dockerImageRef: text('docker_image_ref'),
+    buildError: text('build_error'),
     status: toolStatusEnum('status').notNull().default('draft'),
     // Denormalized for fast listing queries
     installCount: integer('install_count').notNull().default(0),

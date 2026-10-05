@@ -1,8 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import crypto from 'node:crypto'
 import AdmZip from 'adm-zip'
 import { eq, and, sql } from 'drizzle-orm'
 import { getDb } from '../db/index.js'
@@ -72,56 +72,35 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      // 4. Docker Dry-Run
-      const dockerStatus = await checkDockerAvailable()
-      if (!dockerStatus.available) {
-        return reply.status(500).send({ 
-          error: 'DOCKER_UNAVAILABLE', 
-          message: 'Docker Desktop doesn\'t appear to be running. Please start Docker Desktop and try again.' 
-        })
-      }
-
-      const passed = await runMcpDryRun(extractDir, manifest.entrypoint, manifest)
-      if (!passed) {
-        return reply.status(400).send({ 
-          error: 'DRY_RUN_FAILED', 
-          message: 'Tool failed to initialize and respond to MCP handshake in Docker.' 
-        })
-      }
-
-      // If a Dockerfile is present, we built the image during dry-run. Now we push it to GHCR.
-      if (manifest.dockerfile) {
-        const ghcrNamespace = process.env.GHCR_NAMESPACE
-        const ghcrToken = process.env.GHCR_TOKEN
-        if (ghcrNamespace && ghcrToken) {
-          const dryRunImageName = `agenthub-dryrun-${manifest.name}-${manifest.version}`
-          const finalImageRef = `ghcr.io/${ghcrNamespace}/${manifest.name}:${manifest.version}`
-          
-          try {
-            const { execFileSync } = await import('node:child_process')
-            // Login to GHCR (safe since token is passed via stdin)
-            const dockerLogin = spawn('docker', ['login', 'ghcr.io', '-u', ghcrNamespace, '--password-stdin'])
-            dockerLogin.stdin.write(ghcrToken + '\n')
-            dockerLogin.stdin.end()
-            await new Promise((resolve) => dockerLogin.on('close', resolve))
-
-            execFileSync('docker', ['tag', dryRunImageName, finalImageRef])
-            execFileSync('docker', ['push', finalImageRef])
-            manifest.dockerImageRef = finalImageRef
-          } catch (err) {
-            req.log.error(err, 'Failed to push Docker image to GHCR')
-            // We can optionally fail the publish here, or let it proceed with local zip extraction.
-            // Let's continue since desktop can fallback to building from zip if `dockerImageRef` is missing.
-          }
-        }
-      }
-
-      // 5. Store package to uploads directory (simulating S3)
+      // 4. Store package to uploads directory first (simulating S3)
       const uploadsDir = path.join(process.cwd(), 'uploads', 'tools')
       await fs.promises.mkdir(uploadsDir, { recursive: true })
       const packageFilename = `${manifest.name}-${manifest.version}-${tmpId}.zip`
       const packageUrl = `/uploads/tools/${packageFilename}` // In reality, an S3 URL
       await fs.promises.copyFile(zipPath, path.join(uploadsDir, packageFilename))
+
+      // 5. Build/Test Pipeline
+      const isCloud = process.env.DEPLOYMENT_MODE === 'cloud'
+      const initialStatus = isCloud && manifest.dockerfile ? 'building' : 'published'
+
+      if (!isCloud) {
+        // Desktop mode: dry-run and build locally
+        const dockerStatus = await checkDockerAvailable()
+        if (!dockerStatus.available) {
+          return reply.status(500).send({ 
+            error: 'DOCKER_UNAVAILABLE', 
+            message: 'Docker Desktop doesn\'t appear to be running. Please start Docker Desktop and try again.' 
+          })
+        }
+
+        const passed = await runMcpDryRun(extractDir, manifest.entrypoint, manifest)
+        if (!passed) {
+          return reply.status(400).send({ 
+            error: 'DRY_RUN_FAILED', 
+            message: 'Tool failed to initialize and respond to MCP handshake in Docker.' 
+          })
+        }
+      }
 
       // 6. DB Insertion
       let toolId: string
@@ -145,9 +124,9 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
             description: manifest.description,
             manifestJson: manifest,
             packageUrl: packageUrl,
-            dockerImageRef: manifest.dockerImageRef,
+            dockerImageRef: manifest.dockerImageRef, // this might be empty initially for cloud, updated via webhook later
             updatedAt: new Date(),
-            status: 'published'
+            status: initialStatus
           }).where(eq(tools.id, toolId))
         } else {
           // Create new tool
@@ -159,7 +138,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
             manifestJson: manifest,
             packageUrl: packageUrl,
             dockerImageRef: manifest.dockerImageRef,
-            status: 'published'
+            status: initialStatus
           }).returning({ id: tools.id })
           toolId = inserted[0].id
         }
@@ -178,7 +157,51 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(403).send({ error: 'FORBIDDEN', message: 'You do not own this tool' })
       }
 
-      return reply.send({ success: true, toolId: toolId!, message: 'Tool published successfully' })
+      // 7. Trigger GitHub Actions if Cloud
+      if (isCloud && manifest.dockerfile) {
+        if (!process.env.GITHUB_TOKEN || !process.env.GITHUB_REPO || !process.env.BUILD_CALLBACK_SECRET) {
+          req.log.warn('Missing GitHub Actions env vars. Build will not be triggered.')
+          return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Cloud build environment not configured properly.' })
+        }
+        
+        // Allow overriding the host URL for local ngrok testing
+        const hostUrl = process.env.PUBLIC_API_URL || `${req.protocol}://${req.hostname}`
+        const zip_url = `${hostUrl}${packageUrl}`
+        const callback_url = `${hostUrl}/marketplace/build-callback`
+
+        try {
+          const ghRes = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPO}/actions/workflows/build-tool.yml/dispatches`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              ref: 'docker-upload',
+              inputs: {
+                tool_name: manifest.name,
+                tool_version: manifest.version,
+                tool_id: toolId!,
+                zip_url,
+                callback_url,
+                callback_secret: process.env.BUILD_CALLBACK_SECRET,
+                entrypoint: JSON.stringify(manifest.entrypoint),
+              }
+            })
+          })
+          
+          if (!ghRes.ok) {
+            req.log.error({ response: await ghRes.text() }, 'GitHub Actions trigger failed')
+          }
+        } catch (e) {
+          req.log.error(e, 'Failed to trigger GitHub Actions')
+        }
+
+        return reply.status(202).send({ success: true, toolId: toolId!, message: 'Tool submitted for building. You will be notified when it is ready.', status: 'building' })
+      }
+
+      return reply.send({ success: true, toolId: toolId!, message: 'Tool published successfully', status: 'published' })
     } catch (err) {
       req.log.error(err)
       return reply.status(500).send({ error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : 'Unknown error' })
@@ -454,6 +477,67 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
       req.log.error(err)
       return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Failed to read file from zip' })
     }
+  })
+
+  /**
+   * POST /marketplace/build-callback
+   * Webhook from GitHub Actions to report build result
+   */
+  fastify.post('/marketplace/build-callback', async (req, reply) => {
+    const signature = req.headers['x-hub-signature-256'] as string
+    if (!signature || !process.env.BUILD_CALLBACK_SECRET) {
+      return reply.status(403).send({ error: 'MISSING_SIGNATURE' })
+    }
+
+    const payloadStr = typeof req.body === 'string' ? req.body : JSON.stringify(req.body)
+    const expected = 'sha256=' + crypto
+      .createHmac('sha256', process.env.BUILD_CALLBACK_SECRET)
+      .update(payloadStr)
+      .digest('hex')
+
+    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+      return reply.status(403).send({ error: 'INVALID_SIGNATURE' })
+    }
+
+    const { tool_id, status, docker_image_ref, error } = req.body as any
+    const db = getDb()
+
+    if (status === 'success') {
+      await db.update(tools)
+        .set({
+          status: 'published',
+          dockerImageRef: docker_image_ref,
+          buildError: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(tools.id, tool_id))
+    } else {
+      await db.update(tools)
+        .set({
+          status: 'rejected',
+          buildError: error || 'Build failed',
+          updatedAt: new Date(),
+        })
+        .where(eq(tools.id, tool_id))
+    }
+
+    return reply.send({ ok: true })
+  })
+
+  /**
+   * GET /marketplace/tools/:id/status
+   */
+  fastify.get<{ Params: { id: string } }>('/marketplace/tools/:id/status', { config: { skipSession: true } }, async (req, reply) => {
+    const { id } = req.params
+    const db = getDb()
+    const [tool] = await db.select({
+      status: tools.status,
+      buildError: tools.buildError,
+      dockerImageRef: tools.dockerImageRef,
+    }).from(tools).where(eq(tools.id, id)).limit(1)
+
+    if (!tool) return reply.status(404).send({ error: 'NOT_FOUND' })
+    return reply.send(tool)
   })
 }
 

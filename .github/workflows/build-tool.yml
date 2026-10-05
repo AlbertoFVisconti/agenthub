@@ -1,0 +1,94 @@
+name: Build Tool Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tool_name:
+        description: 'Tool name (e.g., ghidra-decompiler)'
+        required: true
+      tool_version:
+        description: 'Tool version (e.g., 1.0.0)'
+        required: true
+      tool_id:
+        description: 'Tool UUID in the database'
+        required: true
+      zip_url:
+        description: 'URL to download the tool ZIP'
+        required: true
+      callback_url:
+        description: 'Backend webhook URL to report result'
+        required: true
+      callback_secret:
+        description: 'HMAC secret to authenticate the callback'
+        required: true
+      entrypoint:
+        description: 'JSON array of entrypoint command'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      packages: write    # Push to GHCR
+
+    steps:
+      - name: Checkout repo (for ci-dry-run.js script)
+        uses: actions/checkout@v4
+
+      - name: Download tool ZIP
+        run: |
+          curl -fSL "${{ inputs.zip_url }}" -o tool.zip
+          mkdir tool-src
+          cd tool-src && unzip ../tool.zip
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/${{ inputs.tool_name }}:${{ inputs.tool_version }}"
+          # Convert to lowercase to satisfy docker tag requirements
+          IMAGE=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
+          docker build -t "$IMAGE" tool-src/
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: MCP Dry-run test
+        run: |
+          npm install # in case scripts/ci-dry-run.js needs dependencies in the future, though it currently doesn't
+          node scripts/ci-dry-run.js "$IMAGE" '${{ inputs.entrypoint }}'
+
+      - name: Push image to GHCR
+        run: docker push "$IMAGE"
+
+      - name: Make image public
+        run: |
+          curl -X PATCH \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/user/packages/container/${{ inputs.tool_name }}/visibility" \
+            -d '{"visibility":"public"}' || true
+
+      - name: Notify backend (success)
+        if: success()
+        run: |
+          PAYLOAD='{"tool_id":"${{ inputs.tool_id }}","status":"success","docker_image_ref":"'"$IMAGE"'"}'
+          SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ inputs.callback_secret }}" | awk '{print $2}')
+          curl -X POST "${{ inputs.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: sha256=$SIGNATURE" \
+            -d "$PAYLOAD"
+
+      - name: Notify backend (failure)
+        if: failure()
+        run: |
+          PAYLOAD='{"tool_id":"${{ inputs.tool_id }}","status":"failed","error":"Build or dry-run failed. Check GitHub Actions logs."}'
+          SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ inputs.callback_secret }}" | awk '{print $2}')
+          curl -X POST "${{ inputs.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: sha256=$SIGNATURE" \
+            -d "$PAYLOAD"

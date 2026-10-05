@@ -16,6 +16,7 @@ interface Tool {
   name: string
   description: string
   status: string
+  buildError?: string
   metrics?: ToolMetrics
 }
 
@@ -96,7 +97,7 @@ export default function DashboardPage() {
       })
       const data = await res.json()
 
-      if (!res.ok) {
+      if (!res.ok && res.status !== 202) {
         const code = data.error
         let msg = data.message || 'An unknown error occurred.'
         if (code === 'BAD_REQUEST') msg = 'Invalid request. Please provide a valid .zip file.'
@@ -117,6 +118,39 @@ export default function DashboardPage() {
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
+
+  // Poll for status of building tools
+  useEffect(() => {
+    const buildingTools = tools.filter(t => t.status === 'building')
+    if (buildingTools.length === 0) return
+
+    const interval = setInterval(async () => {
+      let changed = false
+      const newTools = [...tools]
+
+      for (let i = 0; i < newTools.length; i++) {
+        if (newTools[i].status === 'building') {
+          try {
+            const res = await fetch(`${REMOTE_API_BASE}/marketplace/tools/${newTools[i].id}/status`)
+            if (res.ok) {
+              const data = await res.json()
+              if (data.status !== 'building') {
+                newTools[i].status = data.status
+                changed = true
+                if (data.status === 'rejected') {
+                  setPublishError(`Build failed for ${newTools[i].name}: ${data.buildError || 'Unknown error'}`)
+                }
+              }
+            }
+          } catch (err) {}
+        }
+      }
+
+      if (changed) setTools(newTools)
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [tools])
 
   if (loading && !error) {
     return (
@@ -241,10 +275,27 @@ export default function DashboardPage() {
                   <h3 style={{ margin: 0, color: '#fff', fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>{tool.name}</h3>
                   <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <span style={{ color: 'hsl(220 15% 60%)', fontSize: '0.9rem' }}>{tool.description}</span>
-                    <span style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>
+                    <span style={{ 
+                      background: tool.status === 'rejected' ? 'rgba(239, 68, 68, 0.1)' : tool.status === 'building' ? 'rgba(234, 179, 8, 0.1)' : 'rgba(56, 189, 248, 0.1)', 
+                      color: tool.status === 'rejected' ? '#ef4444' : tool.status === 'building' ? '#eab308' : '#38bdf8', 
+                      padding: '0.2rem 0.6rem', 
+                      borderRadius: '4px', 
+                      fontSize: '0.75rem', 
+                      fontWeight: 600, 
+                      textTransform: 'uppercase',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem'
+                    }}>
+                      {tool.status === 'building' && <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />}
                       {tool.status}
                     </span>
                   </div>
+                  {tool.status === 'rejected' && tool.buildError && (
+                    <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderLeft: '3px solid #ef4444', borderRadius: '0 4px 4px 0', fontSize: '0.85rem', color: 'hsl(220 15% 85%)', fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: '150px', overflowY: 'auto' }}>
+                      {tool.buildError}
+                    </div>
+                  )}
                 </div>
                 <button 
                   onClick={() => handleDeleteTool(tool.id)}

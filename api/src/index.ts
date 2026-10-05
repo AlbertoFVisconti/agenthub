@@ -206,6 +206,29 @@ async function start() {
     fastify.log.error(err)
     process.exit(1)
   }
+
+  // Cleanup stale 'building' tools (e.g. if webhook fails or GH Actions runner dies)
+  if (process.env.DEPLOYMENT_MODE === 'cloud') {
+    setInterval(async () => {
+      try {
+        const { getDb } = await import('./db/index.js');
+        const { tools } = await import('./db/schema.js');
+        const { sql } = await import('drizzle-orm');
+        const db = getDb();
+        
+        // Find tools building for > 20 mins and reject them
+        await db.update(tools)
+          .set({
+            status: 'rejected',
+            buildError: 'Build timed out after 20 minutes',
+            updatedAt: new Date()
+          })
+          .where(sql`${tools.status} = 'building' AND ${tools.updatedAt} < NOW() - INTERVAL '20 minutes'`);
+      } catch (err) {
+        fastify.log.error(err, 'Failed to cleanup stale builds');
+      }
+    }, 5 * 60 * 1000); // Check every 5 mins
+  }
 }
 
 if (process.env.NODE_ENV !== 'test') {
