@@ -2,9 +2,14 @@ export const LOCAL_API_BASE = process.env.NEXT_PUBLIC_LOCAL_API_BASE || 'http://
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
 export const REMOTE_API_BASE = API_URL
 
-export function loginWithGithub() {
+export async function loginWithGithub() {
   if (typeof window !== 'undefined' && (window as any).electron) {
-    (window as any).electron.ipcRenderer.send('auth:login')
+    try {
+      await (window as any).electronAPI.login()
+      window.location.reload()
+    } catch (err) {
+      console.error('Electron login failed:', err)
+    }
   } else {
     // Navigate directly to the API server to ensure the oauth_state cookie
     // is set on the exact same origin that GitHub will redirect back to.

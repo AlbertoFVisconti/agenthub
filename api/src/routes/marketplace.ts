@@ -144,6 +144,10 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         // Insert tool version
+        // Delete any existing version record to avoid unique constraint violations on re-publish
+        await tx.delete(toolVersions)
+          .where(and(eq(toolVersions.toolId, toolId!), eq(toolVersions.version, manifest.version)))
+
         await tx.insert(toolVersions).values({
           toolId,
           version: manifest.version,

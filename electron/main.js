@@ -237,19 +237,25 @@ ipcMain.handle('auth:login', async () => {
             throw new Error('No token provided in callback')
           }
           
-          // Set cookie for the remote API origin so fetch(REMOTE_API_BASE) includes it
-          const cookie = {
-            url: remoteApiBase,
+          const isHttps = remoteApiBase.startsWith('https')
+          const baseCookie = {
             name: 'device_id',
             value: token,
             httpOnly: true,
-            secure: remoteApiBase.startsWith('https'),
-            sameSite: 'no_restriction',
+            secure: isHttps,
+            sameSite: isHttps ? 'no_restriction' : 'lax',
             path: '/'
           }
+          await session.defaultSession.cookies.set({ ...baseCookie, url: remoteApiBase })
           
-          await session.defaultSession.cookies.set(cookie)
-          console.log('[AUTH] Cookie set with name:', cookie.name, 'value length:', token.length)
+          if (!isHttps) {
+            // In local dev, broadly set it to prevent localhost vs 127.0.0.1 mismatches
+            await session.defaultSession.cookies.set({ ...baseCookie, url: 'http://127.0.0.1' })
+            await session.defaultSession.cookies.set({ ...baseCookie, url: 'http://localhost' })
+            await session.defaultSession.cookies.set({ ...baseCookie, url: 'http://127.0.0.1:8081' })
+            await session.defaultSession.cookies.set({ ...baseCookie, url: 'http://127.0.0.1:8080' })
+          }
+          console.log('[AUTH] Cookie set with name:', baseCookie.name, 'value length:', token.length)
           console.log('[AUTH] Reloading window...')
           if (mainWindow) mainWindow.reload()
           resolve()

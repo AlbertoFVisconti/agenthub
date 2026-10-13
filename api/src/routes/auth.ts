@@ -283,7 +283,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.redirect(cbUrl.toString())
       }
 
-      return reply.redirect('/dashboard')
+      const frontendUrl = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000'
+      return reply.redirect(`${frontendUrl}/dashboard`)
     } catch (err) {
       req.log.error(err)
       return reply.redirect('/?error=OAuth_failed')

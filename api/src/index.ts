@@ -34,7 +34,7 @@ const HOST = process.env.API_HOST ?? '0.0.0.0'
 
 async function buildServer() {
   const fastify = Fastify({
-    trustProxy: ['127.0.0.1', '::1'],
+    trustProxy: true,
     logger: {
       level: process.env.NODE_ENV === 'production' ? 'warn' : 'info',
       transport:
