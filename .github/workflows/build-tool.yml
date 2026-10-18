@@ -30,6 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      contents: read     # Required to clone/checkout private repository
       packages: write    # Push to GHCR
 
     steps:
