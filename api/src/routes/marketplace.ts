@@ -173,6 +173,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
         const zip_url = `${hostUrl}${packageUrl}`
         const callback_url = `${hostUrl}/marketplace/build-callback`
 
+        try {
           const ghBranch = process.env.GITHUB_REF || 'master'
           const ghRes = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPO}/actions/workflows/build-tool.yml/dispatches`, {
             method: 'POST',
