@@ -173,7 +173,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
         const zip_url = `${hostUrl}${packageUrl}`
         const callback_url = `${hostUrl}/marketplace/build-callback`
 
-        try {
+          const ghBranch = process.env.GITHUB_REF || 'master'
           const ghRes = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPO}/actions/workflows/build-tool.yml/dispatches`, {
             method: 'POST',
             headers: {
@@ -182,7 +182,7 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              ref: 'docker-upload',
+              ref: ghBranch,
               inputs: {
                 tool_name: manifest.name,
                 tool_version: manifest.version,
@@ -196,10 +196,23 @@ const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
           })
           
           if (!ghRes.ok) {
-            req.log.error({ response: await ghRes.text() }, 'GitHub Actions trigger failed')
+            const errText = await ghRes.text()
+            req.log.error({ response: errText }, 'GitHub Actions trigger failed')
+            await db.update(tools).set({
+              status: 'rejected',
+              buildError: `GitHub Actions trigger failed: ${errText}`,
+              updatedAt: new Date()
+            }).where(eq(tools.id, toolId!))
+            return reply.status(502).send({ error: 'BUILD_TRIGGER_FAILED', message: `GitHub Actions trigger failed: ${errText}` })
           }
-        } catch (e) {
+        } catch (e: any) {
           req.log.error(e, 'Failed to trigger GitHub Actions')
+          await db.update(tools).set({
+            status: 'rejected',
+            buildError: `Failed to trigger GitHub Actions: ${e?.message || 'Unknown error'}`,
+            updatedAt: new Date()
+          }).where(eq(tools.id, toolId!))
+          return reply.status(502).send({ error: 'BUILD_TRIGGER_FAILED', message: `Failed to trigger GitHub Actions: ${e?.message || 'Unknown error'}` })
         }
 
         return reply.status(202).send({ success: true, toolId: toolId!, message: 'Tool submitted for building. You will be notified when it is ready.', status: 'building' })

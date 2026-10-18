@@ -38,7 +38,7 @@ jobs:
 
       - name: Download tool ZIP
         run: |
-          curl -fSL "${{ inputs.zip_url }}" -o tool.zip
+          curl -fSL -H "ngrok-skip-browser-warning: true" "${{ inputs.zip_url }}" -o tool.zip
           mkdir tool-src
           cd tool-src && unzip ../tool.zip
 
@@ -80,6 +80,7 @@ jobs:
           SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ inputs.callback_secret }}" | awk '{print $2}')
           curl -X POST "${{ inputs.callback_url }}" \
             -H "Content-Type: application/json" \
+            -H "ngrok-skip-browser-warning: true" \
             -H "X-Hub-Signature-256: sha256=$SIGNATURE" \
             -d "$PAYLOAD"
 
@@ -90,5 +91,6 @@ jobs:
           SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ inputs.callback_secret }}" | awk '{print $2}')
           curl -X POST "${{ inputs.callback_url }}" \
             -H "Content-Type: application/json" \
+            -H "ngrok-skip-browser-warning: true" \
             -H "X-Hub-Signature-256: sha256=$SIGNATURE" \
             -d "$PAYLOAD"
