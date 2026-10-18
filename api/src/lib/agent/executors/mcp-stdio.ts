@@ -60,7 +60,7 @@ export class StdioMcpExecutor implements ToolExecutor {
 
   async listTools(): Promise<ToolDefinition[]> {
     if (this._tools) return this._tools
-    const res = await this.rpc({ method: 'tools/list' }, 8000)
+    const res = await this.rpc({ method: 'tools/list' }, 20000)
     if (res.error) throw new Error(`MCP tools/list error: ${res.error.message}`)
     this._tools = (res.result?.tools ?? []).map((t: any) => ({
       name: t.name,
