@@ -67,7 +67,7 @@ function createWindow() {
 
   // In development, load from localhost:3000
   // In production, load the static Next.js files
-  if (process.env.NODE_ENV === 'development') {
+  if (!app.isPackaged || process.env.NODE_ENV === 'development') {
     loadURLWithRetry(mainWindow, 'http://localhost:3000')
     mainWindow.webContents.openDevTools()
   } else {
@@ -211,7 +211,7 @@ ipcMain.handle('dialog:pickProjectFolder', async () => {
 
 ipcMain.handle('auth:login', async () => {
   const state = crypto.randomBytes(16).toString('hex')
-  const remoteApiBase = process.env.NEXT_PUBLIC_API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
+  const remoteApiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081'
   
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
@@ -220,6 +220,15 @@ ipcMain.handle('auth:login', async () => {
       if (url.pathname === '/') {
         const receivedState = url.searchParams.get('state')
         const token = url.searchParams.get('token')
+        const error = url.searchParams.get('error')
+        
+        if (error) {
+          res.writeHead(400, { 'Content-Type': 'text/html' })
+          res.end(`<h1>Authentication Failed</h1><p>Error: ${error}</p>`)
+          server.close()
+          reject(new Error(`Authentication failed: ${error}`))
+          return
+        }
         
         if (receivedState !== state) {
           res.writeHead(400, { 'Content-Type': 'text/html' })
@@ -254,6 +263,8 @@ ipcMain.handle('auth:login', async () => {
             await session.defaultSession.cookies.set({ ...baseCookie, url: 'http://localhost' })
             await session.defaultSession.cookies.set({ ...baseCookie, url: 'http://127.0.0.1:8081' })
             await session.defaultSession.cookies.set({ ...baseCookie, url: 'http://127.0.0.1:8080' })
+            await session.defaultSession.cookies.set({ ...baseCookie, url: 'http://localhost:8081' })
+            await session.defaultSession.cookies.set({ ...baseCookie, url: 'http://localhost:8080' })
           }
           console.log('[AUTH] Cookie set with name:', baseCookie.name, 'value length:', token.length)
           console.log('[AUTH] Reloading window...')

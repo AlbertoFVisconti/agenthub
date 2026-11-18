@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect } from 'react'
 import { Store, Search, Download, CheckCircle2, ChevronRight, Package, ShieldCheck, Trash2 } from 'lucide-react'
@@ -41,7 +41,7 @@ export default function MarketplacePage() {
         return res.json()
       }),
       // We do not throw on installs failure since anonymous users won't have any
-      fetch(`${REMOTE_API_BASE}/marketplace/installs`).then(res => res.ok ? res.json() : { installs: [] })
+      fetch(`${REMOTE_API_BASE}/marketplace/installs`, { credentials: 'include' }).then(res => res.ok ? res.json() : { installs: [] })
     ])
       .then(([toolsData, installsData]) => {
         if (toolsData.tools) {
@@ -69,6 +69,7 @@ export default function MarketplacePage() {
       const res = await fetch(`${REMOTE_API_BASE}/marketplace/install`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ toolId })
       })
       if (res.ok) {
@@ -87,7 +88,8 @@ export default function MarketplacePage() {
     setUninstalling(prev => ({ ...prev, [toolId]: true }))
     try {
       const res = await fetch(`${REMOTE_API_BASE}/marketplace/install/${toolId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        credentials: 'include'
       })
       if (res.ok) {
         setInstalled(prev => {

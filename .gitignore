@@ -37,3 +37,10 @@ coverage/
 
 # Temp
 *.tmp
+uploads/
+api/uploads/
+logs.txt
+*.zip
+test-tool/
+*.tsbuildinfo
+

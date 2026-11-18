@@ -98,19 +98,16 @@ async function buildServer() {
 
   // 🚀 Routes 
   await fastify.register(healthRoute)
+  await fastify.register(dockerRoutes)
+  await fastify.register(authRoutes)
+  await fastify.register(modelsRoutes)
+  await fastify.register(agentRoutes)
+  await fastify.register(historyRoutes, { prefix: '/history' })
   
   if (process.env.DEPLOYMENT_MODE !== 'desktop') {
-    await fastify.register(authRoutes)
     const marketplaceRoutes = await import('./routes/marketplace.js')
     await fastify.register(marketplaceRoutes.default)
     await fastify.register(creatorRoutes)
-  }
-  
-  if (process.env.DEPLOYMENT_MODE === 'desktop') {
-    await fastify.register(modelsRoutes)
-    await fastify.register(agentRoutes)
-    await fastify.register(dockerRoutes)
-    await fastify.register(historyRoutes, { prefix: '/history' })
   }
 
   // Root route so the user sees something instead of 404

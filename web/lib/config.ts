@@ -1,5 +1,5 @@
-export const LOCAL_API_BASE = process.env.NEXT_PUBLIC_LOCAL_API_BASE || 'http://localhost:8080'
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
+export const LOCAL_API_BASE = process.env.NEXT_PUBLIC_LOCAL_API_BASE || (typeof window !== 'undefined' && (window as any).electron ? 'http://localhost:8080' : 'http://localhost:8081')
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081'
 export const REMOTE_API_BASE = API_URL
 
 export async function loginWithGithub() {

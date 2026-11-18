@@ -43,6 +43,23 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
   }
 }
 
+export async function signOAuthState(payload: any): Promise<string> {
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('10m')
+    .sign(getSecret())
+}
+
+export async function verifyOAuthState(token: string): Promise<any | null> {
+  try {
+    const { payload } = await jwtVerify(token, getSecret())
+    return payload
+  } catch {
+    return null
+  }
+}
+
 export { SESSION_COOKIE }
 
 // ─────────────────────────────────────────────────────────────

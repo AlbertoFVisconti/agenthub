@@ -59,7 +59,8 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
    */
   fastify.post('/models/chat', {
     handler: async (req, reply) => {
-      const isDesktop = process.env.DEPLOYMENT_MODE === 'desktop'
+      const isLocalHost = req.hostname === 'localhost' || req.hostname === '127.0.0.1' || req.hostname.startsWith('localhost:') || req.hostname.startsWith('127.0.0.1:')
+      const isDesktop = process.env.DEPLOYMENT_MODE === 'desktop' || isLocalHost
       const session = req.session
       
       if (!session && !isDesktop) {
@@ -84,8 +85,6 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
       // SECURITY GATE: Only allow BuiltinExecutor (local file access/RCE) if we are in development
       // mode AND the request originates from localhost.
       if (workspacePath) {
-        const isDesktop = process.env.DEPLOYMENT_MODE === 'desktop'
-        
         if (!isDesktop) {
           return reply.status(403).send({
             error: 'FORBIDDEN',
@@ -119,7 +118,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
           let userInstalls: { toolId: string, packageUrl: string | null, manifestJson: unknown, dockerImageRef: string | null }[] = []
 
           if (process.env.DEPLOYMENT_MODE === 'desktop') {
-            const CLOUD_API_URL = process.env.API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
+            const CLOUD_API_URL = process.env.API_URL || 'http://localhost:8081'
             try {
               const res = await fetch(`${CLOUD_API_URL}/marketplace/installs`, {
                 headers: {
@@ -178,7 +177,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
             if (process.env.DEPLOYMENT_MODE === 'desktop') {
               try {
                 if (!fsSync.existsSync(path.join(toolDir, 'manifest.json'))) {
-                  const CLOUD_API_URL = process.env.API_URL || 'https://p01--agenthub--4cwccydynvym.code.run'
+                  const CLOUD_API_URL = process.env.API_URL || 'http://localhost:8081'
                   const dlRes = await fetch(`${CLOUD_API_URL}${inst.packageUrl}`)
                   if (!dlRes.ok) {
                     req.log.error({ status: dlRes.status, url: inst.packageUrl }, 'Failed to download tool zip')

@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { eq } from 'drizzle-orm'
 import { getDb, users } from '../db/index.js'
-import { SESSION_COOKIE, signSession } from '../lib/auth.js'
+import { SESSION_COOKIE, signSession, signOAuthState, verifyOAuthState } from '../lib/auth.js'
 import { v4 as uuidv4 } from 'uuid'
 import '@fastify/cookie'
 
@@ -106,13 +106,15 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const desktopState = req.query && (req.query as any).state
     
-    // Generate state for CSRF protection
-    const state = uuidv4()
-    
-    // Store desktop params in cookie state if present
-    const cookieState = desktopCallback ? JSON.stringify({ s: state, dc: desktopCallback, ds: desktopState }) : state;
+    // Generate signed state payload for stateless CSRF protection across ports & hosts
+    const statePayload = {
+      s: uuidv4(),
+      dc: desktopCallback,
+      ds: desktopState
+    }
+    const state = await signOAuthState(statePayload);
 
-    (reply as any).setCookie('oauth_state', cookieState, {
+    (reply as any).setCookie('oauth_state', JSON.stringify(statePayload), {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -126,12 +128,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: 'OAuth Not Configured' })
     }
 
-    const host = req.headers['x-forwarded-host'] || req.headers.host
-    const proto = req.headers['x-forwarded-proto'] || req.protocol
-    const publicUrl = process.env.PUBLIC_URL || (host ? `${proto}://${host}` : 'http://127.0.0.1:8081')
-
-    const redirectUri = `${publicUrl}/auth/github/callback`
-    const githubUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=read:user user:email&state=${state}`
+    // Do not pass redirect_uri so GitHub automatically defaults to whatever Authorization callback URL
+    // is configured in the GitHub OAuth App settings (prevents "redirect_uri not associated" errors).
+    const githubUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=read:user user:email&state=${encodeURIComponent(state)}`
     return reply.redirect(githubUrl)
   })
 
@@ -140,32 +139,43 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
    * Exchanges the OAuth code for a token, fetches user info, and creates a session.
    */
   fastify.get('/auth/github/callback', async (req, reply) => {
+    const frontendUrl = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000'
     const { code, state } = req.query as { code?: string, state?: string }
     if (!code || !state) {
-      return reply.redirect('/?error=Missing_code_or_state')
+      return reply.redirect(`${frontendUrl}/?error=Missing_code_or_state`)
     }
 
-    const storedStateRaw = (req as any).cookies?.oauth_state
-    if (!storedStateRaw) {
-      return reply.redirect('/?error=Invalid_state_CSRF_failed')
-    }
-    
-    let expectedState = storedStateRaw
     let desktopCallback: string | null = null
     let desktopState: string | null = null
-    try {
-      const parsed = JSON.parse(storedStateRaw)
-      if (parsed.s) expectedState = parsed.s
-      if (parsed.dc) desktopCallback = parsed.dc
-      if (parsed.ds) desktopState = parsed.ds
-    } catch (e) {}
 
-    if (state !== expectedState) {
-      return reply.redirect('/?error=Invalid_state_CSRF_failed')
+    // 1. Validate signed state (stateless, works across ports and localhost/127.0.0.1)
+    const verified = await verifyOAuthState(state)
+    if (verified) {
+      desktopCallback = verified.dc || null
+      desktopState = verified.ds || null
+    } else {
+      // 2. Fallback to cookie check if present
+      const storedStateRaw = (req as any).cookies?.oauth_state
+      if (storedStateRaw) {
+        try {
+          const parsed = JSON.parse(storedStateRaw)
+          if (parsed.dc) desktopCallback = parsed.dc
+          if (parsed.ds) desktopState = parsed.ds
+          if (parsed.s && state !== parsed.s) {
+            return reply.redirect(`${frontendUrl}/?error=Invalid_state_CSRF_failed`)
+          }
+        } catch {
+          if (state !== storedStateRaw) {
+            return reply.redirect(`${frontendUrl}/?error=Invalid_state_CSRF_failed`)
+          }
+        }
+      } else {
+        return reply.redirect(`${frontendUrl}/?error=Invalid_state_CSRF_failed`)
+      }
     }
 
     // Clear state cookie
-    (reply as any).clearCookie('oauth_state', { path: '/' })
+    try { (reply as any).clearCookie('oauth_state', { path: '/' }) } catch {}
 
     const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID
     const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET
@@ -176,7 +186,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      const publicUrl = process.env.PUBLIC_URL || 'http://127.0.0.1:8081'
+      const tokenBody: Record<string, string> = {
+        client_id: GITHUB_CLIENT_ID,
+        client_secret: GITHUB_CLIENT_SECRET,
+        code,
+      }
 
       // 1. Exchange code for access token
       const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
@@ -185,18 +199,14 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({
-          client_id: GITHUB_CLIENT_ID,
-          client_secret: GITHUB_CLIENT_SECRET,
-          code,
-          redirect_uri: `${publicUrl}/auth/github/callback`
-        })
+        body: JSON.stringify(tokenBody)
       })
       const tokenData = await tokenRes.json() as any
       const accessToken = tokenData.access_token
 
       if (!accessToken) {
-        throw new Error('Failed to obtain access token')
+        fastify.log.error({ tokenData }, 'Failed to exchange code for GitHub access token')
+        throw new Error(tokenData?.error_description || tokenData?.error || 'Failed to obtain access token')
       }
 
       // 2. Fetch user profile
@@ -287,7 +297,14 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.redirect(`${frontendUrl}/dashboard`)
     } catch (err) {
       req.log.error(err)
-      return reply.redirect('/?error=OAuth_failed')
+      if (desktopCallback) {
+        try {
+          const cbUrl = new URL(desktopCallback)
+          cbUrl.searchParams.set('error', 'OAuth_failed')
+          return reply.redirect(cbUrl.toString())
+        } catch {}
+      }
+      return reply.redirect(`${frontendUrl}/?error=OAuth_failed`)
     }
   })
 }

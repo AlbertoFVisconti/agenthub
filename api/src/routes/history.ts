@@ -61,9 +61,10 @@ const UpdateConversationSchema = z.object({
 })
 
 export const historyRoutes: FastifyPluginAsync = async (app) => {
-  // Ensure we are in desktop mode (no auth needed)
+  // Ensure we are in desktop mode or local host (no cloud auth needed)
   app.addHook('onRequest', async (req, reply) => {
-    if (process.env.DEPLOYMENT_MODE !== 'desktop') {
+    const isLocalHost = req.hostname === 'localhost' || req.hostname === '127.0.0.1' || req.hostname.startsWith('localhost:') || req.hostname.startsWith('127.0.0.1:')
+    if (process.env.DEPLOYMENT_MODE !== 'desktop' && !isLocalHost) {
       return reply.status(403).send({ error: 'FORBIDDEN' })
     }
     initHistoryDir()
