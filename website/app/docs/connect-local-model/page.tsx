@@ -44,10 +44,10 @@ export default function ConnectLocalModelGuide() {
             Open the AgentHub app and go to Settings -{'>'} Models.
           </p>
           <ul style={{ color: 'hsl(220 15% 75%)', paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', listStyleType: 'disc' }}>
-            <li>Select <strong>Custom (OpenAI Compatible)</strong> as the provider.</li>
-            <li>Enter the model name (e.g., <code>llama3</code>) exactly as it appears in your runner.</li>
-            <li>Give it a display label (e.g., "My Local Llama3").</li>
-            <li>Enter your local server URL in the Base URL field (e.g., <code>http://127.0.0.1:11434/v1</code>).</li>
+            <li>Select <strong>Custom</strong> as the provider.</li>
+            <li>Enter the <strong>Model ID</strong> (e.g., <code>llama3</code>) exactly as it appears in your runner.</li>
+            <li>Give it a <strong>Display Name</strong> (e.g., &quot;My Local Llama3&quot;).</li>
+            <li>Enter your local server URL in the <strong>Base URL</strong> field (e.g., <code>http://127.0.0.1:11434/v1</code>).</li>
             <li>Click <strong>Save</strong>.</li>
           </ul>
         </section>

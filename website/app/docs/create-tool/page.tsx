@@ -39,7 +39,7 @@ export default function CreateToolGuide() {
             Scaffold a new tool
           </h2>
           <p style={{ color: 'hsl(220 15% 75%)', marginBottom: '1rem' }}>
-            We provide a CLI generator to instantly scaffold a working tool template. Run this in your terminal:
+            We provide a CLI generator to instantly scaffold a working tool template. Tool names must use lowercase letters, numbers, and dashes only (e.g. <code>word-counter</code>). Run this in your terminal:
           </p>
           <pre style={{ backgroundColor: '#111', border: '1px solid #333', padding: '1rem', borderRadius: '8px', overflowX: 'auto', color: '#e5e7eb', marginBottom: '1rem' }}>
             <code>npx create-agenthub-tool word-counter</code>
@@ -69,34 +69,34 @@ export default function CreateToolGuide() {
           </div>
 
           <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#fff', marginBottom: '0.5rem' }}>manifest.json</h3>
-          <p style={{ color: 'hsl(220 15% 75%)', marginBottom: '1rem' }}>Define the name, version, and a clear description so users know what your tool does.</p>
+          <p style={{ color: 'hsl(220 15% 75%)', marginBottom: '1rem' }}>Define the name, semver version, description (max 200 characters), and the container <code>entrypoint</code> command.</p>
           <pre style={{ backgroundColor: '#111', border: '1px solid #333', padding: '1rem', borderRadius: '8px', overflowX: 'auto', color: '#e5e7eb', fontSize: '0.9rem' }}>
             <code>{`{
   "name": "word-counter",
   "version": "1.0.0",
   "description": "A tool that counts the number of words in a provided text string.",
-  "main": "index.js"
+  "entrypoint": ["node", "index.js"]
 }`}</code>
           </pre>
 
           <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#fff', marginBottom: '0.5rem', marginTop: '1.5rem' }}>index.js</h3>
-          <p style={{ color: 'hsl(220 15% 75%)', marginBottom: '1rem' }}>Use <code>defineTool</code> from the SDK to declare your input schema and the handler function.</p>
+          <p style={{ color: 'hsl(220 15% 75%)', marginBottom: '1rem' }}>Use <code>defineTool</code> from <code>@agenthub-tools/tool-sdk</code> to declare a JSON Schema <code>inputSchema</code> and a <code>handler</code> that returns a string.</p>
           <pre style={{ backgroundColor: '#111', border: '1px solid #333', padding: '1rem', borderRadius: '8px', overflowX: 'auto', color: '#e5e7eb', fontSize: '0.9rem' }}>
             <code>{`import { defineTool } from '@agenthub-tools/tool-sdk'
-import { z } from 'zod'
 
-export default defineTool({
+defineTool({
   name: 'word-counter',
   description: 'Counts the number of words in a text string.',
-  schema: z.object({
-    text: z.string().describe('The text to count words for')
-  }),
+  inputSchema: {
+    type: 'object',
+    properties: {
+      text: { type: 'string', description: 'The text to count words for' }
+    },
+    required: ['text']
+  },
   handler: async ({ text }) => {
-    const wordCount = text.trim().split(/\\s+/).length
-    return {
-      success: true,
-      data: \`The text contains \${wordCount} words.\`
-    }
+    const count = text.trim().split(/\\s+/).filter(Boolean).length
+    return \`The text contains \${count} words.\`
   }
 })`}</code>
           </pre>
@@ -117,7 +117,7 @@ export default defineTool({
               <strong>Validate:</strong> Checks your <code>manifest.json</code> and tool schema for errors.
               <pre style={{ backgroundColor: '#111', border: '1px solid #333', padding: '0.75rem', borderRadius: '8px', marginTop: '0.5rem', color: '#e5e7eb' }}><code>npx @agenthub-tools/tool-cli validate</code></pre>
               <em style={{ fontSize: '0.85rem', color: '#9ca3af', display: 'block', marginTop: '0.5rem' }}>✅ Success: "Manifest is valid!"</em>
-              <em style={{ fontSize: '0.85rem', color: '#f87171', display: 'block', marginTop: '0.25rem' }}>❌ Failure: "Invalid manifest: 'name' is required and must be a string."</em>
+              <em style={{ fontSize: '0.85rem', color: '#f87171', display: 'block', marginTop: '0.25rem' }}>❌ Failure: &quot;Validation failed: - entrypoint: Required&quot;</em>
             </li>
             <li>
               <strong>Test:</strong> Spawns a temporary Docker container and runs your tool inside it, exactly as it will run in production.
@@ -158,13 +158,13 @@ export default defineTool({
             Publish your tool
           </h2>
           <p style={{ color: 'hsl(220 15% 75%)', marginBottom: '1rem' }}>
-            Tools are published through the AgentHub Desktop App. 
-            There is no prior approval or manual review process required — published tools go live on the marketplace immediately! 
+            Tools are published through the AgentHub Desktop App.
+            There is no manual review queue — plain Node.js tools go live immediately, while tools with a custom <code>Dockerfile</code> are automatically built in the cloud before going live.
           </p>
           <ul style={{ color: 'hsl(220 15% 75%)', paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', listStyleType: 'disc' }}>
             <li>Open the AgentHub desktop app.</li>
-            <li>Sign in with your GitHub account (this automatically provisions your Creator profile).</li>
-            <li>Navigate to the <strong>Creator Dashboard</strong>.</li>
+            <li>Sign in with your GitHub account.</li>
+            <li>Click <strong>Dashboard</strong> in the top navigation bar to open the Creator Dashboard.</li>
             <li>Click <strong>Publish New Tool</strong>.</li>
             <li>Upload the zip file you generated in Step 5.</li>
           </ul>
@@ -190,9 +190,9 @@ export default defineTool({
             Next Steps
           </h2>
           <ul style={{ color: '#818cf8', paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', listStyleType: 'circle' }}>
-            <li><Link href="/docs/sdk-reference" style={{ color: '#818cf8', textDecoration: 'none' }}>Review the full SDK Reference</Link></li>
-            <li><Link href="/docs/best-practices" style={{ color: '#818cf8', textDecoration: 'none' }}>Read our Tool Design Best Practices</Link></li>
-            <li><Link href="/marketplace" style={{ color: '#818cf8', textDecoration: 'none' }}>Browse example tools on the Marketplace</Link></li>
+            <li><Link href="/marketplace" style={{ color: '#818cf8', textDecoration: 'none' }}>Browse tools on the Marketplace</Link></li>
+            <li><Link href="/docs/connect-local-model" style={{ color: '#818cf8', textDecoration: 'none' }}>Connect a Local Model (Ollama, LM Studio, vLLM)</Link></li>
+            <li><Link href="/download" style={{ color: '#818cf8', textDecoration: 'none' }}>Download the AgentHub Desktop App</Link></li>
           </ul>
         </section>
 
